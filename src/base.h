@@ -18,13 +18,27 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#ifndef BLSTOOLS_H
-#define BLSTOOLS_H
+#ifndef BASEMATHPACK_H
+#define BASEMATHPACK_H
 
-// ============================================================================
-// COMMAND CLASS (ENUM)
-// ============================================================================
+#ifdef HAVE_CONFIG_H
+        #include <config.h>
+#endif
 
-enum class Command { none, bls, scan };
+#define USE_FLOAT
+
+#include <complex>
+
+#ifdef USE_FLOAT
+        typedef float deci;
+        #define ZERO_THRESHOLD (1e-5)
+#else
+        typedef double deci;
+        #define ZERO_THRESHOLD (1e-12)
+#endif
+
+typedef std::complex<double> dcomplex;
+typedef std::complex<float> scomplex;
+typedef std::complex<deci> cplx;
 
 #endif

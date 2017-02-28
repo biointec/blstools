@@ -18,13 +18,28 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#ifndef BLSTOOLS_H
-#define BLSTOOLS_H
+#ifndef BLASMATHPACK_H
+#define BLASMATHPACK_H
+
+#include "base.h"
 
 // ============================================================================
-// COMMAND CLASS (ENUM)
+// BLAS SINGLE/DOUBLE PRECISION FUNCTION PROTOTYPES
 // ============================================================================
 
-enum class Command { none, bls, scan };
+#ifdef USE_FLOAT
+        #define gemm_f77 sgemm_f77
+#else
+        #define gemm_f77 dgemm_f77
+#endif
+
+#define sgemm_f77 F77_FUNC (sgemm, SGEMM)
+
+// general matrix-matrix multiplication
+extern "C" void sgemm_f77(const char* transA, const char* transB, const int* M,
+                          const int* N, const int* K, const float* alpha,
+                          const float* A, const int* lda, const float *B,
+                          const int *ldb, const float *beta, float *C,
+                          const int*ldc);
 
 #endif

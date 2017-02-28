@@ -1,0 +1,24 @@
+For more detailed installation instructions, please refere to the document 
+section on http://github.com/biointec/blstools.
+
+Dependencies
+============
+
+ - CMake version 2.6 or higher
+ - C++ compiler with C++11 support
+ - BLAS (Basic Linear Algebra Subroutines)
+
+Compilation instructions
+========================
+
+# compilation instructions:
+
+ > mkdir build
+ > cd build
+ > cmake ..
+ > make
+
+# optionally:
+
+ > make install
+

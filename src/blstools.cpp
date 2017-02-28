@@ -23,6 +23,7 @@
 
 #include "blstools.h"
 #include "bls.h"
+#include "pwmscan.h"
 
 using namespace std;
 
@@ -42,6 +43,7 @@ void printUsage()
         cout << "Usage: blstools command [options]\n\n";
 
         cout << " command\n";
+        cout << "  scan\t\t\tscan for pwm occurrences\n";
         cout << "  bls\t\t\tcompute the branch length score\n\n";
 
         cout << " [options]\n";
@@ -51,10 +53,20 @@ void printUsage()
         cout << "Report bugs to Jan Fostier <jan.fostier@ugent.be>\n";
 }
 
-void runBLSmodule(int argc, char **argv)
+void runBLSModule(int argc, char **argv)
 {
         try {
                 BLS bls(argc, argv);
+        } catch (runtime_error e) {
+                cerr << e.what() << endl;
+                exit(EXIT_FAILURE);
+        }
+}
+
+void runScanModule(int argc, char **argv)
+{
+        try {
+                PWMScan scan(argc, argv);
         } catch (runtime_error e) {
                 cerr << e.what() << endl;
                 exit(EXIT_FAILURE);
@@ -77,6 +89,8 @@ int main(int argc, char **argv)
                         exit(EXIT_SUCCESS);
                 } else if (arg == "bls") {
                         command = Command::bls;
+                } else if (arg == "scan") {
+                        command = Command::scan;
                 }
         }
 
@@ -87,7 +101,10 @@ int main(int argc, char **argv)
                         exit(EXIT_FAILURE);
                         break;
                 case Command::bls:
-                        runBLSmodule(argc, argv);
+                        runBLSModule(argc, argv);
+                        break;
+                case Command::scan:
+                        runScanModule(argc, argv);
                         break;
         }
 

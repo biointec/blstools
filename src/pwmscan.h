@@ -18,13 +18,43 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#ifndef BLSTOOLS_H
-#define BLSTOOLS_H
+#ifndef PWMSCAN_H
+#define PWMSCAN_H
+
+#include <array>
+#include <vector>
+
+#include "matrix.h"
+#include "motif.h"
 
 // ============================================================================
-// COMMAND CLASS (ENUM)
+// PWMSCAN
 // ============================================================================
 
-enum class Command { none, bls, scan };
+class PWMScan
+{
+private:
+        std::string outputFilename;
+        bool listProvided;
+        float threshold;
+
+        /**
+         * Print module instructions
+         */
+        void printUsage() const;
+
+public:
+        /**
+         * Constructor (run scan module)
+         * @param argc Command line argument count
+         * @param argv Command line argument values
+         */
+        PWMScan(int argc, char **argv);
+
+        void loadFasta(const std::string& filename, std::string& sequence);
+
+        void countFrequencies(const std::string& sequence,
+                              std::array<float, 5>& frequencies);
+};
 
 #endif
