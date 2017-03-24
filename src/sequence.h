@@ -24,6 +24,8 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <fstream>
+#include <mutex>
 
 #include "matrix.h"
 #include "motif.h"
@@ -96,6 +98,18 @@ public:
                 assert(it != block2seq.begin());
                 --it;
                 return it->second.getSeqPos() + blockPos - it->first;
+        }
+
+        /**
+         * Given a block position, get the remaining length within the sequence
+         * @param blockPos Block position
+         * @return The remaining length within this sequence
+         */
+        size_t getRemainingSeqLen(size_t blockPos) const {
+                auto it = block2seq.upper_bound(blockPos);
+                assert(it != block2seq.begin());
+                size_t nextBlockPos = (it == block2seq.end()) ? block.size() : it->first;
+                return nextBlockPos - blockPos;
         }
 
         /**
@@ -221,6 +235,8 @@ private:
         std::vector<std::string> seqFiles;
         std::array<float, 5> nucleotideFreq;    // nucleotide frequency
 
+        std::mutex m;
+
 public:
         /**
          * Default constructor
@@ -326,7 +342,8 @@ private:
 
         void extractOccurrences(const Matrix<float>& R,
                                 std::vector<MotifOccurrence>& motifOcc,
-                                size_t offset, float threshold);
+                                size_t offset, float threshold,
+                                const MotifContainer& motifs);
 
 public:
         /**
@@ -355,7 +372,7 @@ public:
          */
         void findOccurrences(const Matrix<float>& P,
                              std::vector<MotifOccurrence>& motifOcc,
-                             float threshold);
+                             float threshold, const MotifContainer& motifs);
 
         /**
          * operator<< overloading

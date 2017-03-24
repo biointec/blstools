@@ -21,6 +21,8 @@
 #include <iostream>
 #include <fstream>
 #include <iomanip>
+#include <thread>
+#include <algorithm>
 
 #include "pwmscan.h"
 #include "sequence.h"
@@ -33,6 +35,7 @@ void PWMScan::printUsage() const
 
         cout << " [options]\n";
         cout << "  -h\t--help\t\tdisplay help message\n";
+        cout << "  -rc\t--revcompl\talso search the reverse strand for occurrences [default = no]\n";
         cout << "  -t\t--threshold\tset the minimal score for a motif occurrence\n";
         cout << "  -l\t--list\t\tprovide a list of input fasta filenames\n\n";
 
@@ -88,7 +91,34 @@ void PWMScan::countFrequencies(const string& sequence,
                 frequencies[i] /= sequence.size();
 }
 
-PWMScan::PWMScan(int argc, char ** argv) : listProvided(false), threshold(15)
+void PWMScan::scanThread(size_t myID, const MotifContainer& motifs,
+                         const Matrix<float>& P, FastaBatch& seqBatch, ostream& os)
+{
+        cout << "Thread with threadID " << myID << " launched" << endl;
+
+        SeqMatrix sm(K, overlap, n);
+        while (sm.getNextSeqMatrix(seqBatch)) {
+
+                vector<MotifOccurrence> motifOcc;
+                sm.findOccurrences(P, motifOcc, threshold, motifs);
+
+                lock_guard<mutex> lock(myMutex);
+                for (size_t i = 0; i < motifOcc.size(); i++) {
+                        size_t motifIdx = motifOcc[i].getMotifID();
+                        os << "Motif occurrence " << motifs[motifIdx].getName() << "\n";
+                        os << motifOcc[i] << "\n";
+                }
+
+                totMatches += motifOcc.size();
+
+                cout << ".";
+                cout.flush();
+        }
+
+        cout << "Thread with threadID " << myID << " terminates" << endl;
+}
+
+PWMScan::PWMScan(int argc, char ** argv) : listProvided(false), threshold(15), revCompl(false)
 {
         // check for sufficient arguments
         if (argc < 4) {
@@ -106,6 +136,8 @@ PWMScan::PWMScan(int argc, char ** argv) : listProvided(false), threshold(15)
                 } else if (((arg == "-t") || (arg == "--threshold")) && (i+1 < argc-2)) {
                         threshold = atof(argv[i+1]);
                         i++;
+                } else if ((arg == "-rc") || (arg == "--revcompl")) {
+                        revCompl = true;
                 } else if ((arg == "-l") || (arg == "--list")) {
                         listProvided = true;
                 } else if (((arg == "-o") || (arg == "--output")) && (i+1 < argc-2)) {
@@ -147,19 +179,26 @@ PWMScan::PWMScan(int argc, char ** argv) : listProvided(false), threshold(15)
         cout << "Loaded " << motifs.size() << " motifs" << endl;
         cout << "Maximum motif size: " << motifs.getMaxMotifLen() << endl;
 
+        if (revCompl) {
+                cout << "Also searching for occurrences in the reverse complementary strand" << endl;
+                motifs.addReverseCompl();
+        }
+
+        cout << "Loaded " << motifs.size() << " motifs" << endl;
+
         // result matrix
-        size_t m = motifs.size();       // number of motifs
-        size_t n = 1000;                // choose freely
+        m = motifs.size();       // number of motifs
+        n = 1000;                // choose freely
         Matrix<float> R(m, n);
 
         // pattern matrix
-        size_t k = 4 * motifs.getMaxMotifLen();
+        k = 4 * motifs.getMaxMotifLen();
         Matrix<float> P(m, k);
         motifs.generateMatrix(P);
 
         // sequence matrix
-        size_t overlap = motifs.getMaxMotifLen() - 1;
-        size_t K = 250;                // choose freely
+        overlap = motifs.getMaxMotifLen() - 1;
+        K = 250;                // choose freely
 
         ofstream ofs;
         if (!outputFilename.empty())
@@ -172,25 +211,29 @@ PWMScan::PWMScan(int argc, char ** argv) : listProvided(false), threshold(15)
         cout << "Scanning sequences (every dot corresponds to " << K*n
              << " nucleotides of sequence processed)" << endl;
 
-        SeqMatrix sm(K, overlap, n);
-        while (sm.getNextSeqMatrix(seqBatch)) {
+        totMatches = 0;
 
-                vector<MotifOccurrence> motifOcc;
-                sm.findOccurrences(P, motifOcc, threshold);
+        const unsigned int& numThreads = 4;     // FIXME
+        cout << "Number of threads: " << numThreads << endl;
 
-                for (size_t i = 0; i < motifOcc.size(); i++) {
-                        size_t motifIdx = motifOcc[i].getMotifID();
-                        os << "Motif occurrence " << motifs[motifIdx].getName() << "\n";
-                        os << motifOcc[i] << "\n";
-                }
+        /*libraries.startIOThreads(settings.getThreadWorkSize(),
+                                 10 * settings.getThreadWorkSize() * settings.getNumThreads(),
+                                 true);*/
 
-                cout << ".";
-                cout.flush();
-        }
+        // start worker threads
+        vector<thread> workerThreads(numThreads);
+        for (size_t i = 0; i < workerThreads.size(); i++)
+                workerThreads[i] = thread(&PWMScan::scanThread, this,
+                                          i, cref(motifs), cref(P), ref(seqBatch), ref(os));
+
+        // wait for worker threads to finish
+        for_each(workerThreads.begin(), workerThreads.end(), mem_fn(&thread::join));
+
+        //libraries.joinIOThreads();
 
         if (!outputFilename.empty())
                 ofs.close();
 
-        cout << "\n";
+        cout << "\nFound " << totMatches << " matches\n";
         cout << "Bye!" << endl;
 }

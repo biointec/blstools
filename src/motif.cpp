@@ -23,6 +23,7 @@
 #include <cmath>
 
 #include <iostream>
+#include <algorithm>
 
 #include "motif.h"
 
@@ -69,6 +70,18 @@ float Motif::getScore(const std::string& pattern) const
         return score;
 }
 
+void Motif::revCompl()
+{
+        name.append("_RC");
+        reverse(motif.begin(), motif.end());
+
+        for (size_t i = 0; i < motif.size(); i++) {
+                array<float, 4> copy = motif[i];
+                motif[i] = array<float, 4>{copy[3], copy[2], copy[1], copy[0]};
+        }
+
+}
+
 ostream& operator<< (ostream& os, const Motif& m)
 {
         os << m.name << "\n";
@@ -107,10 +120,23 @@ MotifContainer::MotifContainer(const std::string& filename,
         ifs.close();
 
         for (auto& m : motifs)
-                m.posFreq2PWM({bgFreq[0], bgFreq[1], bgFreq[2], bgFreq[3]});
+                m.posFreq2PWM({0.25, 0.25, 0.25, 0.25}/*{bgFreq[0], bgFreq[1], bgFreq[2], bgFreq[3]}*/);
 
-        //for (auto& m : motifs)
-        //        cout << m << endl;
+        ofstream ofs("jaspar2.possum");
+        for (auto& m : motifs) {
+                ofs << "BEGIN GROUP" << endl;
+                ofs << "BEGIN FLOAT" << endl;
+                ofs << "ID " << m.getName() << endl;
+                ofs << "AC " << "dummy" << endl;
+                ofs << "DE " << "dummy description" << endl;
+                ofs << "AP DNA" << endl;
+                ofs << "LE " << m.size() << endl;
+                for (size_t i = 0; i < m.size(); i++)
+                        ofs << "MA " << m[i][0] << " " << m[i][1] << " "
+                            << m[i][2] << " " << m[i][3] << endl;
+                ofs << "END" << endl;
+                ofs << "END" << endl;
+        }
 }
 
 void MotifContainer::generateMatrix(Matrix<float>& M)
@@ -122,6 +148,15 @@ void MotifContainer::generateMatrix(Matrix<float>& M)
                 for (size_t j = 0; j < motifs[i].size(); j++)
                         for (size_t o = 0; o < 4; o++)
                                 M(i, 4*j+o) = motifs[i][j][o];
+}
+
+void MotifContainer::addReverseCompl()
+{
+        vector<Motif> copy = motifs;
+        motifs.insert(motifs.end(), copy.begin(), copy.end());
+
+        for (size_t i = motifs.size() / 2; i < motifs.size(); i++)
+                motifs[i].revCompl();
 }
 
 size_t MotifContainer::getMaxMotifLen() const

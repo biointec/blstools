@@ -25,6 +25,7 @@ else()
 endif()
 
 find_package(BLAS REQUIRED)
+find_package(Threads REQUIRED)
 
 # write the config.h configuration file
 configure_file(cmake/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/src/config.h)
@@ -34,6 +35,6 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}/src")
 
 add_executable(blstools src/blstools.cpp src/bls.cpp src/phylotree.cpp
         src/matrix.cpp src/pwmscan.cpp src/motif.cpp src/sequence.cpp)
-target_link_libraries(blstools ${BLAS_LIBRARIES})
+target_link_libraries(blstools ${BLAS_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
 install(TARGETS blstools RUNTIME DESTINATION bin)

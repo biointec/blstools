@@ -26,6 +26,7 @@
 
 #include "matrix.h"
 #include "motif.h"
+#include "sequence.h"
 
 // ============================================================================
 // PWMSCAN
@@ -37,11 +38,29 @@ private:
         std::string outputFilename;
         bool listProvided;
         float threshold;
+        bool revCompl;
+
+
+        size_t m;               // number of motifs
+        size_t n;               // choose freely
+        size_t k;               // maximum motif length
+        size_t overlap;         // overlap
+        size_t K;               // choose freely
+
+        std::mutex myMutex;
+        size_t totMatches;
 
         /**
          * Print module instructions
          */
         void printUsage() const;
+
+        /**
+         * Thread function that does the actual scanning
+         *
+         */
+        void scanThread(size_t myID, const MotifContainer& motifs,
+                        const Matrix<float>& P, FastaBatch& fb, std::ostream& os);
 
 public:
         /**

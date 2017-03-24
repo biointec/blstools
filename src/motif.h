@@ -56,13 +56,18 @@ public:
                 return motif.size();
         }
 
-        std::array<float,4> operator[](size_t i) {
+        std::array<float,4> operator[](size_t i) const {
                 return motif[i];
         }
 
         std::string getName() const {
                 return name;
         }
+
+        /**
+         * Reverse complement the motif
+         */
+        void revCompl();
 
         /**
          * Compute the PWM score given a pattern
@@ -97,6 +102,8 @@ public:
 
         void generateMatrix(Matrix<float>& M);
 
+        void addReverseCompl();
+
         /**
          * Get the number of motifs
          */
@@ -104,7 +111,7 @@ public:
                 return motifs.size();
         }
 
-        Motif operator[](size_t index) {
+        Motif operator[](size_t index) const {
                 return motifs[index];
         }
 

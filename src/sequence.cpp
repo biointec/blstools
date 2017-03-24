@@ -197,6 +197,8 @@ bool FastaBatch::getNextBlock(SeqBlock& block, size_t maxSize)
 bool FastaBatch::getNextOverlappingBlock(SeqBlock& block, size_t maxSize,
                                          size_t overlap)
 {
+        lock_guard<mutex> lock(m);
+
         block = _nextBlock;
 
         bool retVal = getNextBlock(block, maxSize);
@@ -240,7 +242,8 @@ bool SeqMatrix::getNextSeqMatrix(FastaBatch& bf)
 
 void SeqMatrix::extractOccurrences(const Matrix<float>& R,
                                    std::vector<MotifOccurrence>& motifOcc,
-                                   size_t offset, float threshold)
+                                   size_t offset, float threshold,
+                                   const MotifContainer& motifs)
 {
         for (size_t j = 0; j < numOccCol; j++) {
                 for (size_t i = 0; i < R.nRows(); i++) {
@@ -252,6 +255,11 @@ void SeqMatrix::extractOccurrences(const Matrix<float>& R,
                         size_t motifID = i;
                         size_t seqID = block.getSeqIdx(j*K+offset);
                         size_t seqPos = block.getSeqPos(j*K+offset);
+                        size_t remSeqLen = block.getRemainingSeqLen(j*K+offset);
+
+                        if (motifs[motifID].size() > remSeqLen)
+                                continue;
+
                         motifOcc.push_back(MotifOccurrence(motifID, seqID, seqPos, thisScore));
                 }
         }
@@ -259,14 +267,14 @@ void SeqMatrix::extractOccurrences(const Matrix<float>& R,
 
 void SeqMatrix::findOccurrences(const Matrix<float>& P,
                                 vector<MotifOccurrence>& motifOcc,
-                                float threshold)
+                                float threshold, const MotifContainer& motifs)
 {
         motifOcc.clear();
 
         Matrix<float> R(P.nRows(), numOccCol);
         for (int offset = 0; offset < K; offset++) {
                 R.gemm(P, S, 4*offset, numOccCol);
-                extractOccurrences(R, motifOcc, offset, threshold);
+                extractOccurrences(R, motifOcc, offset, threshold, motifs);
         }
 }
 
