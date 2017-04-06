@@ -36,7 +36,9 @@ void PWMScan::printUsage() const
         cout << " [options]\n";
         cout << "  -h\t--help\t\tdisplay help message\n";
         cout << "  -rc\t--revcompl\talso search the reverse strand for occurrences [default = no]\n";
-        cout << "  -t\t--threshold\tset the minimal score for a motif occurrence\n";
+        cout << "  -at\t--absthreshold\tset the minimal absolute score for a motif occurrence\n";
+        cout << "  -rt\t--relthreshold\tset the minimal relative score [0..1] for a motif occurrence\n";
+        cout << "  -t\t--numthreads\tset the number of parallel threads [default = 1]\n";
         cout << "  -l\t--list\t\tprovide a list of input fasta filenames\n\n";
 
         cout << " [file_options]\n";
@@ -100,12 +102,11 @@ void PWMScan::scanThread(size_t myID, const MotifContainer& motifs,
         while (sm.getNextSeqMatrix(seqBatch)) {
 
                 vector<MotifOccurrence> motifOcc;
-                sm.findOccurrences(P, motifOcc, threshold, motifs);
+                sm.findOccurrences(P, motifOcc, motifs);
 
                 lock_guard<mutex> lock(myMutex);
                 for (size_t i = 0; i < motifOcc.size(); i++) {
                         size_t motifIdx = motifOcc[i].getMotifID();
-                        os << "Motif occurrence " << motifs[motifIdx].getName() << "\n";
                         os << motifOcc[i] << "\n";
                 }
 
@@ -118,7 +119,9 @@ void PWMScan::scanThread(size_t myID, const MotifContainer& motifs,
         cout << "Thread with threadID " << myID << " terminates" << endl;
 }
 
-PWMScan::PWMScan(int argc, char ** argv) : listProvided(false), threshold(15), revCompl(false)
+PWMScan::PWMScan(int argc, char ** argv) : listProvided(false),
+        absThSpecified(false), absThreshold(0.0), relThSpecified(false),
+        relThreshold(1.0), numThreads(1), revCompl(false)
 {
         // check for sufficient arguments
         if (argc < 4) {
@@ -133,10 +136,18 @@ PWMScan::PWMScan(int argc, char ** argv) : listProvided(false), threshold(15), r
                 if ((arg == "-h") || (arg == "--help")) {
                         printUsage();
                         exit(EXIT_SUCCESS);
-                } else if (((arg == "-t") || (arg == "--threshold")) && (i+1 < argc-2)) {
-                        threshold = atof(argv[i+1]);
+                } else if (((arg == "-at") || (arg == "--absthreshold")) && (i+1 < argc-2)) {
+                        absThSpecified = true;
+                        absThreshold = atof(argv[i+1]);
                         i++;
-                } else if ((arg == "-rc") || (arg == "--revcompl")) {
+                } else if (((arg == "-rt") || (arg == "--relthreshold")) && (i+1 < argc-2)) {
+                        relThSpecified = true;
+                        relThreshold = atof(argv[i+1]);
+                        i++;
+                } else if (((arg == "-t") || (arg == "--numthreads")) && (i+1 < argc-2)) {
+                        numThreads = atoi(argv[i+1]);
+                        i++;
+                }else if ((arg == "-rc") || (arg == "--revcompl")) {
                         revCompl = true;
                 } else if ((arg == "-l") || (arg == "--list")) {
                         listProvided = true;
@@ -151,16 +162,28 @@ PWMScan::PWMScan(int argc, char ** argv) : listProvided(false), threshold(15), r
 
         cout << "Welcome to fast PWM scan" << endl;
 
+        // We cannot specify both the absolute and relative threshold
+        if (absThSpecified && relThSpecified)
+                throw runtime_error("Specify either the absolute or relative threshold, not both.");
+        if (relThSpecified) {
+                if ((relThreshold < 0.0) || (relThreshold > 1.0))
+                        throw runtime_error("The relative threshold should be in range [0..1].");
+        }
+
+        if (numThreads < 1)
+                throw runtime_error("Number of threads must be a non-zero positive number");
+
         // A) LOAD THE SEQUENCES AND COMPUTE THE BACKGROUND FREQUENCIES
         FastaBatch seqBatch;
         if (listProvided)
-                seqBatch.addList(string(argv[argc-1]));
+                seqBatch.addList(string(argv[argc-2]));
         else
-                seqBatch.addFile(string(argv[argc-1]));
+                seqBatch.addFile(string(argv[argc-2]));
 
         cout << "Computing nucleotide frequencies for "
              << seqBatch.size() << " input files..." << endl;
         seqBatch.calcBGFrequencies();
+        seqBatch.writeSeqNames(string(argv[argc-2]) + ".idx");
         cout << "Read " << seqBatch.getNumSequences()
              << " sequences with a total length of "
              << seqBatch.getTotalSeqLength() << endl;
@@ -175,16 +198,24 @@ PWMScan::PWMScan(int argc, char ** argv) : listProvided(false), threshold(15), r
              << "non-ACGT: " << 100*bgFreq[4] << "%]" << endl;
 
         // B) LOAD THE MOTIFS AND CONVERT TO POSITION WEIGHT MATRICES
-        MotifContainer motifs(argv[argc-2], bgFreq);
-        cout << "Loaded " << motifs.size() << " motifs" << endl;
+        MotifContainer motifs(argv[argc-1], bgFreq);
+        cout << "Loaded " << motifs.size() << " motifs from disk..." << endl;
         cout << "Maximum motif size: " << motifs.getMaxMotifLen() << endl;
 
         if (revCompl) {
-                cout << "Also searching for occurrences in the reverse complementary strand" << endl;
+                cout << "Adding reverse complementary motifs" << endl;
                 motifs.addReverseCompl();
         }
 
-        cout << "Loaded " << motifs.size() << " motifs" << endl;
+        if (absThSpecified) {
+                cout << "Absolute motif score threshold set to: " << absThreshold << endl;
+                motifs.setAbsThreshold(absThreshold);
+        } else {
+                cout << "Relative motif score threshold set to: " << relThreshold << endl;
+                motifs.setRelThreshold(relThreshold);
+        }
+
+        motifs.writeMotifNames(string(argv[argc-1]) + ".idx");
 
         // result matrix
         m = motifs.size();       // number of motifs
@@ -207,18 +238,12 @@ PWMScan::PWMScan(int argc, char ** argv) : listProvided(false), threshold(15), r
 
         seqBatch.reset();
 
-        cout << "Motif occurrence threshold: " << threshold << endl;
         cout << "Scanning sequences (every dot corresponds to " << K*n
              << " nucleotides of sequence processed)" << endl;
 
         totMatches = 0;
 
-        const unsigned int& numThreads = 4;     // FIXME
         cout << "Number of threads: " << numThreads << endl;
-
-        /*libraries.startIOThreads(settings.getThreadWorkSize(),
-                                 10 * settings.getThreadWorkSize() * settings.getNumThreads(),
-                                 true);*/
 
         // start worker threads
         vector<thread> workerThreads(numThreads);
@@ -228,8 +253,6 @@ PWMScan::PWMScan(int argc, char ** argv) : listProvided(false), threshold(15), r
 
         // wait for worker threads to finish
         for_each(workerThreads.begin(), workerThreads.end(), mem_fn(&thread::join));
-
-        //libraries.joinIOThreads();
 
         if (!outputFilename.empty())
                 ofs.close();

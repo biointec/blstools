@@ -70,6 +70,18 @@ public:
         void revCompl();
 
         /**
+         * Get the maximum score for this motif
+         * @return The maximum score for this motif
+         */
+        float getMaxScore() const;
+
+        /**
+         * Get the minimum score for this motif
+         * @return The minimum score for this motif
+         */
+        float getMinScore() const;
+
+        /**
          * Compute the PWM score given a pattern
          * @param pattern Pattern to compare against
          */
@@ -90,19 +102,43 @@ public:
 class MotifContainer {
 private:
         std::vector<Motif> motifs;
+        std::vector<float> threshold;
 
 public:
         /**
          * Create a motif file from disk
          * @param filename File name
-         * @param bfFreq Background frequencies
+         * @param bgFreq Background frequencies
          */
         MotifContainer(const std::string& filename,
                        const std::array<float, 5>& bgFreq);
 
         void generateMatrix(Matrix<float>& M);
 
+        /**
+         * Add the reverse complements to the container
+         */
         void addReverseCompl();
+
+        /**
+         * Set a global absolute score threshold for each motif
+         * @param absThreshold Absolute score threshold
+         */
+        void setAbsThreshold(float absThreshold) {
+                threshold = std::vector<float>(motifs.size(), absThreshold);
+        }
+
+        /**
+         * Set a relative score threshold [0..1] for each motif
+         * @param relThreshold Relative score threshold
+         */
+        void setRelThreshold(float relThreshold);
+
+        /**
+         * Write the motif names
+         * @param filename File name of the motif file
+         */
+        void writeMotifNames(const std::string& filename);
 
         /**
          * Get the number of motifs
@@ -113,6 +149,10 @@ public:
 
         Motif operator[](size_t index) const {
                 return motifs[index];
+        }
+
+        float getThreshold(size_t index) const {
+                return threshold[index];
         }
 
         size_t getMaxMotifLen() const;
@@ -141,6 +181,7 @@ public:
          */
         MotifOccurrence(size_t motifID_, size_t sequenceID_,
                         size_t sequencePos_, float score_);
+
 
         size_t getMotifID() const {
                 return motifID;

@@ -70,6 +70,33 @@ float Motif::getScore(const std::string& pattern) const
         return score;
 }
 
+float Motif::getMaxScore() const
+{
+        float maxScore = 0.0;
+
+        for (auto& pos : motif) {
+                float maxAC = max<float>(pos[0], pos[1]);
+                float maxGT = max<float>(pos[2], pos[3]);
+                maxScore += max<float>(maxAC, maxGT);
+        }
+
+        return maxScore;
+}
+
+float Motif::getMinScore() const
+{
+        float minScore = 0.0;
+
+        for (auto& pos : motif) {
+                float minAC = min<float>(pos[0], pos[1]);
+                float minGT = min<float>(pos[2], pos[3]);
+                minScore += min<float>(minAC, minGT);
+        }
+
+        return minScore;
+}
+
+
 void Motif::revCompl()
 {
         name.append("_RC");
@@ -107,7 +134,7 @@ MotifContainer::MotifContainer(const std::string& filename,
                 if (temp.empty())
                         continue;
                 if (temp.front() == '>') {
-                        motifs.push_back(Motif(temp));
+                        motifs.push_back(Motif(temp.substr(1)));
                         continue;
                 }
                 istringstream iss(temp);
@@ -122,7 +149,7 @@ MotifContainer::MotifContainer(const std::string& filename,
         for (auto& m : motifs)
                 m.posFreq2PWM({0.25, 0.25, 0.25, 0.25}/*{bgFreq[0], bgFreq[1], bgFreq[2], bgFreq[3]}*/);
 
-        ofstream ofs("jaspar2.possum");
+        /*ofstream ofs("jaspar2.possum");
         for (auto& m : motifs) {
                 ofs << "BEGIN GROUP" << endl;
                 ofs << "BEGIN FLOAT" << endl;
@@ -136,7 +163,7 @@ MotifContainer::MotifContainer(const std::string& filename,
                             << m[i][2] << " " << m[i][3] << endl;
                 ofs << "END" << endl;
                 ofs << "END" << endl;
-        }
+        }*/
 }
 
 void MotifContainer::generateMatrix(Matrix<float>& M)
@@ -157,6 +184,32 @@ void MotifContainer::addReverseCompl()
 
         for (size_t i = motifs.size() / 2; i < motifs.size(); i++)
                 motifs[i].revCompl();
+}
+
+void MotifContainer::setRelThreshold(float relThreshold)
+{
+        threshold.clear();
+        threshold.reserve(motifs.size());
+
+        for (const auto& m : motifs) {
+                float maxScore = m.getMaxScore();
+                float minScore = m.getMinScore();
+
+                threshold.push_back(relThreshold * (maxScore - minScore) + minScore);
+
+                //cout << "Motif " << m.getName() << "[min: " << minScore
+                //     << ", max: " << maxScore << ", th: " << threshold.back() << "]" << endl;
+        }
+}
+
+void MotifContainer::writeMotifNames(const std::string& filename)
+{
+        ofstream ofs(filename.c_str());
+
+        for (auto m : motifs)
+                ofs << m.getName() << "\n";
+
+        ofs.close();
 }
 
 size_t MotifContainer::getMaxMotifLen() const
@@ -182,7 +235,7 @@ ostream& operator<< (ostream& os, const MotifOccurrence& m)
 {
         //os << "Seq ID: " << m.sequenceID << ", seq pos: " << m.sequencePos
         //   << ", motif ID: " << m.getMotifID() << ", score:" << m.score;
-        os << m.getSequenceID() << "\t" << m.getSequencePos() << "\t"
-           << m.getMotifID() << "\t" << m.getScore();
+        os << m.getMotifID() << "\t" << m.getSequenceID() << "\t"
+           << m.getSequencePos() << "\t" << "\t" << m.getScore();
         return os;
 }

@@ -250,6 +250,12 @@ public:
         void calcBGFrequencies();
 
         /**
+         * Write the sequence names
+         * @param filename File name of the output file
+         */
+        void writeSeqNames(const std::string& filename);
+
+        /**
          * Add a single sequence file to process
          * @param filename File name
          */
@@ -342,8 +348,7 @@ private:
 
         void extractOccurrences(const Matrix<float>& R,
                                 std::vector<MotifOccurrence>& motifOcc,
-                                size_t offset, float threshold,
-                                const MotifContainer& motifs);
+                                size_t offset, const MotifContainer& motifs);
 
 public:
         /**
@@ -368,11 +373,11 @@ public:
          * Find the motif findOccurrences
          * @param P Pattern matrix
          * @param motifOcc Motif occurrences (output)
-         * @param threshold Minimal score for an occurrence
+         * @param motifs Motif container
          */
         void findOccurrences(const Matrix<float>& P,
                              std::vector<MotifOccurrence>& motifOcc,
-                             float threshold, const MotifContainer& motifs);
+                             const MotifContainer& motifs);
 
         /**
          * operator<< overloading

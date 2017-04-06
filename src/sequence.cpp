@@ -139,7 +139,7 @@ void FastaBatch::addList(const std::string& listname)
 
                 ifstream fn(filename);
                 if (!fn)
-                        throw runtime_error("Could not fasta file: " + filename);
+                        throw runtime_error("Could not open fasta file: " + filename);
 
                 seqFiles.push_back(filename);
         }
@@ -169,6 +169,16 @@ void FastaBatch::calcBGFrequencies()
 
         for (size_t i = 0; i < 5; i++)
                 nucleotideFreq[i] = (float)nuclCount[i] / (float)_totSeqLen;
+}
+
+void FastaBatch::writeSeqNames(const std::string& filename)
+{
+        ofstream ofs(filename.c_str());
+
+        for (auto it : _seqNames)
+                ofs << it << "\n";
+
+        ofs.close();
 }
 
 bool FastaBatch::getNextBlock(SeqBlock& block, size_t maxSize)
@@ -242,17 +252,17 @@ bool SeqMatrix::getNextSeqMatrix(FastaBatch& bf)
 
 void SeqMatrix::extractOccurrences(const Matrix<float>& R,
                                    std::vector<MotifOccurrence>& motifOcc,
-                                   size_t offset, float threshold,
-                                   const MotifContainer& motifs)
+                                   size_t offset, const MotifContainer& motifs)
 {
         for (size_t j = 0; j < numOccCol; j++) {
                 for (size_t i = 0; i < R.nRows(); i++) {
                         float thisScore = R(i,j);
-                        if (thisScore <= threshold)
+                        size_t motifID = i;
+
+                        if (thisScore < motifs.getThreshold(motifID))
                                 continue;
 
                         // at this point an occurrence is found
-                        size_t motifID = i;
                         size_t seqID = block.getSeqIdx(j*K+offset);
                         size_t seqPos = block.getSeqPos(j*K+offset);
                         size_t remSeqLen = block.getRemainingSeqLen(j*K+offset);
@@ -267,14 +277,14 @@ void SeqMatrix::extractOccurrences(const Matrix<float>& R,
 
 void SeqMatrix::findOccurrences(const Matrix<float>& P,
                                 vector<MotifOccurrence>& motifOcc,
-                                float threshold, const MotifContainer& motifs)
+                                const MotifContainer& motifs)
 {
         motifOcc.clear();
 
         Matrix<float> R(P.nRows(), numOccCol);
         for (int offset = 0; offset < K; offset++) {
                 R.gemm(P, S, 4*offset, numOccCol);
-                extractOccurrences(R, motifOcc, offset, threshold, motifs);
+                extractOccurrences(R, motifOcc, offset, motifs);
         }
 }
 

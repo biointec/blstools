@@ -37,7 +37,15 @@ class PWMScan
 private:
         std::string outputFilename;
         bool listProvided;
-        float threshold;
+
+        bool absThSpecified;
+        float absThreshold;
+
+        bool relThSpecified;
+        float relThreshold;
+
+        size_t numThreads;
+
         bool revCompl;
 
 
