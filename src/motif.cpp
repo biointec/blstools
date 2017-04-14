@@ -99,7 +99,6 @@ float Motif::getMinScore() const
 
 void Motif::revCompl()
 {
-        name.append("_RC");
         reverse(motif.begin(), motif.end());
 
         for (size_t i = 0; i < motif.size(); i++) {
@@ -133,7 +132,7 @@ MotifContainer::MotifContainer(const std::string& filename,
                 getline(ifs, temp);
                 if (temp.empty())
                         continue;
-                if (temp.front() == '>') {
+                if (temp.front() == '>') {      // add a new motif
                         motifs.push_back(Motif(temp.substr(1)));
                         continue;
                 }
@@ -148,42 +147,43 @@ MotifContainer::MotifContainer(const std::string& filename,
 
         for (auto& m : motifs)
                 m.posFreq2PWM({0.25, 0.25, 0.25, 0.25}/*{bgFreq[0], bgFreq[1], bgFreq[2], bgFreq[3]}*/);
-
-        /*ofstream ofs("jaspar2.possum");
-        for (auto& m : motifs) {
-                ofs << "BEGIN GROUP" << endl;
-                ofs << "BEGIN FLOAT" << endl;
-                ofs << "ID " << m.getName() << endl;
-                ofs << "AC " << "dummy" << endl;
-                ofs << "DE " << "dummy description" << endl;
-                ofs << "AP DNA" << endl;
-                ofs << "LE " << m.size() << endl;
-                for (size_t i = 0; i < m.size(); i++)
-                        ofs << "MA " << m[i][0] << " " << m[i][1] << " "
-                            << m[i][2] << " " << m[i][3] << endl;
-                ofs << "END" << endl;
-                ofs << "END" << endl;
-        }*/
 }
 
-void MotifContainer::generateMatrix(Matrix<float>& M)
+void MotifContainer::generateMatrix(Matrix<float>& P,
+                                    vector<size_t>& row2MotifID, bool revCompl)
 {
-        M.fill(0);
-        size_t numMotifs = motifs.size();
+        // allocate memory for matrix P
+        size_t m = motifs.size();
+        if (revCompl)
+                m = m * 2;
 
-        for (size_t i = 0; i < numMotifs; i++)
-                for (size_t j = 0; j < motifs[i].size(); j++)
+        size_t k = 4 * getMaxMotifLen();
+
+        P.setDimensions(m, k);
+        P.allocateMemory(0);
+
+        // fill the matrix
+        for (size_t motifID = 0, row = 0; motifID < motifs.size(); motifID++) {
+                // fill in the forward motif
+                const Motif& fwd = motifs[motifID];
+                for (size_t j = 0; j < fwd.size(); j++)
                         for (size_t o = 0; o < 4; o++)
-                                M(i, 4*j+o) = motifs[i][j][o];
-}
+                                P(row, 4*j+o) = fwd[j][o];
+                row++;
+                row2MotifID.push_back(motifID);
 
-void MotifContainer::addReverseCompl()
-{
-        vector<Motif> copy = motifs;
-        motifs.insert(motifs.end(), copy.begin(), copy.end());
+                // fill in the reverse motif
+                if (!revCompl)
+                        continue;
 
-        for (size_t i = motifs.size() / 2; i < motifs.size(); i++)
-                motifs[i].revCompl();
+                Motif bwd = fwd;
+                bwd.revCompl();
+                for (size_t j = 0; j < bwd.size(); j++)
+                        for (size_t o = 0; o < 4; o++)
+                                P(row, 4*j+o) = bwd[j][o];
+                row++;
+                row2MotifID.push_back(motifID);
+        }
 }
 
 void MotifContainer::setRelThreshold(float relThreshold)
@@ -210,6 +210,25 @@ void MotifContainer::writeMotifNames(const std::string& filename)
                 ofs << m.getName() << "\n";
 
         ofs.close();
+}
+
+void MotifContainer::writePossumFile(const std::string& filename)
+{
+        ofstream ofs(filename.c_str());
+        for (auto& m : motifs) {
+                ofs << "BEGIN GROUP" << endl;
+                ofs << "BEGIN FLOAT" << endl;
+                ofs << "ID " << m.getName() << endl;
+                ofs << "AC " << "dummy" << endl;
+                ofs << "DE " << "dummy description" << endl;
+                ofs << "AP DNA" << endl;
+                ofs << "LE " << m.size() << endl;
+                for (size_t i = 0; i < m.size(); i++)
+                        ofs << "MA " << m[i][0] << " " << m[i][1] << " "
+                            << m[i][2] << " " << m[i][3] << endl;
+                ofs << "END" << endl;
+                ofs << "END" << endl;
+        }
 }
 
 size_t MotifContainer::getMaxMotifLen() const

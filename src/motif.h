@@ -32,11 +32,12 @@
 
 class Motif {
 private:
-        std::string name;
-        std::vector<std::array<float, 4> > motif;
+        std::string name;               // name of the motif
+        std::vector<std::array<float, 4> > motif;               // PWM
 
 public:
-        Motif(const std::string& name_) : name(name_) {};
+        Motif(const std::string& name_) :
+                name(name_) {};
 
         /**
          * Add a character to the current motif
@@ -60,6 +61,18 @@ public:
                 return motif[i];
         }
 
+        /**
+         * Set the name of the motif
+         * @param name_ The name of the motif
+         */
+        void setName(const std::string& name_) {
+                name = name_;
+        }
+
+        /**
+         * Get the name of the motif
+         * @return The name of the motif
+         */
         std::string getName() const {
                 return name;
         }
@@ -107,18 +120,19 @@ private:
 public:
         /**
          * Create a motif file from disk
-         * @param filename File name
+         * @param filename Filename of the motif input file
          * @param bgFreq Background frequencies
          */
         MotifContainer(const std::string& filename,
                        const std::array<float, 5>& bgFreq);
 
-        void generateMatrix(Matrix<float>& M);
-
         /**
-         * Add the reverse complements to the container
+         * @param P Pre-allocated matrix P (output)
+         * @param row2MotifID Index to relate a row of P to a motif ID
+         * @param revCompl Flag to indicate to also add reverse complements
          */
-        void addReverseCompl();
+        void generateMatrix(Matrix<float>& P, std::vector<size_t>& row2MotifID,
+                            bool revCompl);
 
         /**
          * Set a global absolute score threshold for each motif
@@ -141,13 +155,19 @@ public:
         void writeMotifNames(const std::string& filename);
 
         /**
+         * Write the possum file
+         * @param filename File name of the possum file
+         */
+        void writePossumFile(const std::string& filename);
+
+        /**
          * Get the number of motifs
          */
         size_t size() const {
                 return motifs.size();
         }
 
-        Motif operator[](size_t index) const {
+        const Motif& operator[](size_t index) const {
                 return motifs[index];
         }
 
@@ -176,25 +196,43 @@ public:
         MotifOccurrence() {};
 
         /**
-         * Constructor
-         *
+         * Constructor with arguments
+         * @param motifID_ The motif identifier
+         * @param sequenceID_ The sequence identifier
+         * @param sequencePos_ The sequence position identifier
+         * @param score_ The motif score
          */
         MotifOccurrence(size_t motifID_, size_t sequenceID_,
                         size_t sequencePos_, float score_);
 
-
+        /**
+         * Get the motif identifier
+         * @return The motif identifier
+         */
         size_t getMotifID() const {
                 return motifID;
         }
 
+        /**
+         * Get the sequence identifier
+         * @return The sequence identifier
+         */
         size_t getSequenceID() const {
                 return sequenceID;
         }
 
+        /**
+         * Get the sequence position
+         * @return The sequence position
+         */
         size_t getSequencePos() const {
                 return sequencePos;
         }
 
+        /**
+         * Get the motif score
+         * @return The motif score
+         */
         float getScore() const {
                 return score;
         }
@@ -202,7 +240,7 @@ public:
         /**
          * operator<< overloading
          * @param os Output stream
-         * @param pt PhylogeneticTree
+         * @param m Motif occurrence
          */
         friend std::ostream& operator<< (std::ostream& os, const MotifOccurrence& m);
 };

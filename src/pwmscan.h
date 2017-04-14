@@ -68,7 +68,8 @@ private:
          *
          */
         void scanThread(size_t myID, const MotifContainer& motifs,
-                        const Matrix<float>& P, FastaBatch& fb, std::ostream& os);
+                        const Matrix<float>& P, const std::vector<size_t>& row2motifID,
+                        FastaBatch& fb, std::ostream& os);
 
 public:
         /**

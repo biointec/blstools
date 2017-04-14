@@ -346,7 +346,15 @@ private:
         Matrix<float> S;                // actual matrix
         SeqBlock block;                 // sequence block
 
+        /**
+         * Given a result matrix, extract the motif occurrences
+         * @param R Resulting matrix
+         * @param row2motifID Conversion between a row of R and a motif ID
+         * @param motifOcc Vector to store the output motif occurrences (output)
+         * @param motifs Motif container that holds the motifs
+         */
         void extractOccurrences(const Matrix<float>& R,
+                                const std::vector<size_t>& row2motifID,
                                 std::vector<MotifOccurrence>& motifOcc,
                                 size_t offset, const MotifContainer& motifs);
 
@@ -370,19 +378,21 @@ public:
         bool getNextSeqMatrix(FastaBatch& bf);
 
         /**
-         * Find the motif findOccurrences
-         * @param P Pattern matrix
-         * @param motifOcc Motif occurrences (output)
-         * @param motifs Motif container
+         * Given a pattern matrix, extract the motif occurrences
+         * @param P Pattern matrix (motif matrix)
+         * @param row2motifID Conversion between a row of P and a motif ID
+         * @param motifOcc Vector to store the output motif occurrences (output)
+         * @param motifs Motif container that holds the motifs
          */
         void findOccurrences(const Matrix<float>& P,
+                             const std::vector<size_t>& row2motifID,
                              std::vector<MotifOccurrence>& motifOcc,
                              const MotifContainer& motifs);
 
         /**
          * operator<< overloading
          * @param os Output stream
-         * @param pt PhylogeneticTree
+         * @param sm Sequence matrix
          */
         friend std::ostream& operator<< (std::ostream& os, const SeqMatrix& sm);
 };

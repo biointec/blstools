@@ -18,13 +18,51 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#ifndef BLSTOOLS_H
-#define BLSTOOLS_H
+#ifndef ORTHO_H
+#define ORTHO_H
 
-// ============================================================================
-// COMMAND CLASS (ENUM)
-// ============================================================================
+#include <string>
+#include <map>
+#include <set>
+#include <vector>
 
-enum class Command { none, bls, scan, ortho };
+class OrthoGroup
+{
+private:
+        std::set<std::string> genes;
+
+public:
+        OrthoGroup() {}
+
+        void insert(const std::string& genename) {
+                genes.insert(genename);
+        }
+
+        size_t size() const {
+                return genes.size();
+        }
+};
+
+class Ortho
+{
+private:
+        /**
+         * Print module instructions
+         */
+        void printUsage() const;
+
+        std::map<std::string, OrthoGroup> orthoGroups;
+        std::multimap<std::string, std::string> seq2ortho;
+        std::vector<std::string> seqIndex;
+        std::vector<std::string> motifIndex;
+
+public:
+        /**
+         * Constructor (run Ortho module)
+         * @param argc Command line argument count
+         * @param argv Command line argument values
+         */
+        Ortho(int argc, char **argv);
+};
 
 #endif

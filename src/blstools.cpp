@@ -24,6 +24,7 @@
 #include "blstools.h"
 #include "bls.h"
 #include "pwmscan.h"
+#include "ortho.h"
 
 using namespace std;
 
@@ -45,6 +46,7 @@ void printUsage()
         cout << " command\n";
         cout << "  scan\t\t\tscan for pwm occurrences\n";
         cout << "  bls\t\t\tcompute the branch length score\n\n";
+        cout << "  ortho\t\t\tconvert ortho groups\n\n";
 
         cout << " [options]\n";
         cout << "  -h\t--help\t\tdisplay help page\n";
@@ -73,6 +75,16 @@ void runScanModule(int argc, char **argv)
         }
 }
 
+void runOrthoModule(int argc, char **argv)
+{
+        try {
+                Ortho ortho(argc, argv);
+        } catch (runtime_error e) {
+                cerr << e.what() << endl;
+                exit(EXIT_FAILURE);
+        }
+}
+
 int main(int argc, char **argv)
 {
         Command command = Command::none;
@@ -91,6 +103,8 @@ int main(int argc, char **argv)
                         command = Command::bls;
                 } else if (arg == "scan") {
                         command = Command::scan;
+                } else if (arg == "ortho") {
+                        command = Command::ortho;
                 }
         }
 
@@ -105,6 +119,9 @@ int main(int argc, char **argv)
                         break;
                 case Command::scan:
                         runScanModule(argc, argv);
+                        break;
+                case Command::ortho:
+                        runOrthoModule(argc, argv);
                         break;
         }
 

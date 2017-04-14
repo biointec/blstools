@@ -250,14 +250,14 @@ bool SeqMatrix::getNextSeqMatrix(FastaBatch& bf)
         return numOccCol > 0;
 }
 
-void SeqMatrix::extractOccurrences(const Matrix<float>& R,
+void SeqMatrix::extractOccurrences(const Matrix<float>& R, const vector<size_t>& row2motifID,
                                    std::vector<MotifOccurrence>& motifOcc,
                                    size_t offset, const MotifContainer& motifs)
 {
         for (size_t j = 0; j < numOccCol; j++) {
                 for (size_t i = 0; i < R.nRows(); i++) {
                         float thisScore = R(i,j);
-                        size_t motifID = i;
+                        size_t motifID = row2motifID[i];
 
                         if (thisScore < motifs.getThreshold(motifID))
                                 continue;
@@ -276,6 +276,7 @@ void SeqMatrix::extractOccurrences(const Matrix<float>& R,
 }
 
 void SeqMatrix::findOccurrences(const Matrix<float>& P,
+                                const vector<size_t>& row2motifID,
                                 vector<MotifOccurrence>& motifOcc,
                                 const MotifContainer& motifs)
 {
@@ -284,7 +285,7 @@ void SeqMatrix::findOccurrences(const Matrix<float>& P,
         Matrix<float> R(P.nRows(), numOccCol);
         for (int offset = 0; offset < K; offset++) {
                 R.gemm(P, S, 4*offset, numOccCol);
-                extractOccurrences(R, motifOcc, offset, motifs);
+                extractOccurrences(R, row2motifID, motifOcc, offset, motifs);
         }
 }
 

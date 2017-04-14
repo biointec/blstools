@@ -94,7 +94,8 @@ void PWMScan::countFrequencies(const string& sequence,
 }
 
 void PWMScan::scanThread(size_t myID, const MotifContainer& motifs,
-                         const Matrix<float>& P, FastaBatch& seqBatch, ostream& os)
+                         const Matrix<float>& P, const vector<size_t>& row2motifID,
+                         FastaBatch& seqBatch, ostream& os)
 {
         cout << "Thread with threadID " << myID << " launched" << endl;
 
@@ -102,13 +103,11 @@ void PWMScan::scanThread(size_t myID, const MotifContainer& motifs,
         while (sm.getNextSeqMatrix(seqBatch)) {
 
                 vector<MotifOccurrence> motifOcc;
-                sm.findOccurrences(P, motifOcc, motifs);
+                sm.findOccurrences(P, row2motifID, motifOcc, motifs);
 
                 lock_guard<mutex> lock(myMutex);
-                for (size_t i = 0; i < motifOcc.size(); i++) {
-                        size_t motifIdx = motifOcc[i].getMotifID();
+                for (size_t i = 0; i < motifOcc.size(); i++)
                         os << motifOcc[i] << "\n";
-                }
 
                 totMatches += motifOcc.size();
 
@@ -198,14 +197,11 @@ PWMScan::PWMScan(int argc, char ** argv) : listProvided(false),
              << "non-ACGT: " << 100*bgFreq[4] << "%]" << endl;
 
         // B) LOAD THE MOTIFS AND CONVERT TO POSITION WEIGHT MATRICES
-        MotifContainer motifs(argv[argc-1], bgFreq);
-        cout << "Loaded " << motifs.size() << " motifs from disk..." << endl;
-        cout << "Maximum motif size: " << motifs.getMaxMotifLen() << endl;
+        string motifFilename = string(argv[argc-1]);
 
-        if (revCompl) {
-                cout << "Adding reverse complementary motifs" << endl;
-                motifs.addReverseCompl();
-        }
+        MotifContainer motifs(motifFilename, bgFreq);
+        cout << "Loaded " << motifs.size() << " motifs from disk";
+        cout << "\nMaximum motif size: " << motifs.getMaxMotifLen() << endl;
 
         if (absThSpecified) {
                 cout << "Absolute motif score threshold set to: " << absThreshold << endl;
@@ -215,7 +211,8 @@ PWMScan::PWMScan(int argc, char ** argv) : listProvided(false),
                 motifs.setRelThreshold(relThreshold);
         }
 
-        motifs.writeMotifNames(string(argv[argc-1]) + ".idx");
+        motifs.writeMotifNames(motifFilename + ".idx");
+        motifs.writePossumFile(motifFilename + ".possum");
 
         // result matrix
         m = motifs.size();       // number of motifs
@@ -223,9 +220,9 @@ PWMScan::PWMScan(int argc, char ** argv) : listProvided(false),
         Matrix<float> R(m, n);
 
         // pattern matrix
-        k = 4 * motifs.getMaxMotifLen();
-        Matrix<float> P(m, k);
-        motifs.generateMatrix(P);
+        Matrix<float> P;
+        vector<size_t> row2motifID;
+        motifs.generateMatrix(P, row2motifID, revCompl);
 
         // sequence matrix
         overlap = motifs.getMaxMotifLen() - 1;
@@ -249,7 +246,8 @@ PWMScan::PWMScan(int argc, char ** argv) : listProvided(false),
         vector<thread> workerThreads(numThreads);
         for (size_t i = 0; i < workerThreads.size(); i++)
                 workerThreads[i] = thread(&PWMScan::scanThread, this,
-                                          i, cref(motifs), cref(P), ref(seqBatch), ref(os));
+                                          i, cref(motifs), cref(P),
+                                          cref(row2motifID), ref(seqBatch), ref(os));
 
         // wait for worker threads to finish
         for_each(workerThreads.begin(), workerThreads.end(), mem_fn(&thread::join));

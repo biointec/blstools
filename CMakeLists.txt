@@ -3,7 +3,7 @@ project(blstools)
 
 # project version
 set(${PROJECT_NAME}_MAJOR_VERSION 0)
-set(${PROJECT_NAME}_MINOR_VERSION 1)
+set(${PROJECT_NAME}_MINOR_VERSION 3)
 set(${PROJECT_NAME}_PATCH_LEVEL 0)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
@@ -34,7 +34,8 @@ add_definitions(-DHAVE_CONFIG_H)
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/src")
 
 add_executable(blstools src/blstools.cpp src/bls.cpp src/phylotree.cpp
-        src/matrix.cpp src/pwmscan.cpp src/motif.cpp src/sequence.cpp)
+        src/matrix.cpp src/pwmscan.cpp src/motif.cpp src/sequence.cpp
+        src/ortho.cpp)
 target_link_libraries(blstools ${BLAS_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
 install(TARGETS blstools RUNTIME DESTINATION bin)
