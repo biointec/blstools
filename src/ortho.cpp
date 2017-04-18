@@ -165,7 +165,7 @@ Ortho::Ortho(int argc, char ** argv)
         pt.normalizeBranchLength();
 
         // C) Read the occurrence file
-        //ofstream ofs("output.txt");
+        ofstream ofs("BLS.txt");
 
         ifs.open(occFilename.c_str());
         if (!ifs)
@@ -173,6 +173,7 @@ Ortho::Ortho(int argc, char ** argv)
 
         int motifID, prevMotifID = -1, seqID;
         map<string, set<string> > orthoSpecComb;
+        map<string, set<string> > orthoGeneComb;
 
         while (ifs) {
                 ifs >> motifID >> seqID >> temp >> temp;
@@ -187,7 +188,11 @@ Ortho::Ortho(int argc, char ** argv)
                         for (auto it : orthoSpecComb) {
                                 float BLS = pt.getBLS(it.second);
 
-                                //ofs << prevMotifID << "\t" << it.first << "\t" << BLS << "\n";
+                                ofs << prevMotifID << "\t" << motifIndex[prevMotifID] << "\t" << it.first << "\t" << BLS;
+
+                                for (auto gene : orthoGeneComb[it.first])
+                                        ofs << "\t" << gene;
+                                ofs << endl;
 
                                 int end = 0;
                                 if (BLS >= 0.00)
@@ -221,6 +226,7 @@ Ortho::Ortho(int argc, char ** argv)
                         cout << "\n";
 
                         orthoSpecComb.clear();
+                        orthoGeneComb.clear();
                         prevMotifID = motifID;
                 }
 
@@ -229,10 +235,11 @@ Ortho::Ortho(int argc, char ** argv)
 
                 for (auto it = range.first; it != range.second; it++) {
                         orthoSpecComb[it->second].insert(gene2species(seq));
+                        orthoGeneComb[it->second].insert(seq);
                 }
         }
 
 
         ifs.close();
-        //ofs.close();
+        ofs.close();
 }
