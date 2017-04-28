@@ -171,24 +171,29 @@ Ortho::Ortho(int argc, char ** argv)
         if (!ifs)
                 throw runtime_error("Could not open file: " + occFilename);
 
-        int motifID, prevMotifID = -1, seqID;
+        int motifID, nextMotifID, seqID;
         map<string, set<string> > orthoSpecComb;
         map<string, set<string> > orthoGeneComb;
 
+        ifs >> motifID;
         while (ifs) {
-                ifs >> motifID >> seqID >> temp >> temp;
-                if (!ifs)
-                        break;
+                ifs >> seqID >> temp >> temp;
+                ifs >> nextMotifID;
 
-                if (prevMotifID == -1)
-                        prevMotifID = motifID;
+                string seq = seqIndex[seqID];
+                auto range = seq2ortho.equal_range(seq);
 
-                if (motifID != prevMotifID) {
+                for (auto it = range.first; it != range.second; it++) {
+                        orthoSpecComb[it->second].insert(gene2species(seq));
+                        orthoGeneComb[it->second].insert(seq);
+                }
+
+                if (motifID != nextMotifID) {
                         array<size_t, 10> counts = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
                         for (auto it : orthoSpecComb) {
                                 float BLS = pt.getBLS(it.second);
 
-                                ofs << prevMotifID << "\t" << motifIndex[prevMotifID] << "\t" << it.first << "\t" << BLS;
+                                ofs << motifID << "\t" << motifIndex[motifID] << "\t" << it.first << "\t" << BLS;
 
                                 for (auto gene : orthoGeneComb[it.first])
                                         ofs << "\t" << gene;
@@ -220,25 +225,17 @@ Ortho::Ortho(int argc, char ** argv)
                                         counts[i]++;
                         }
 
-                        cout << prevMotifID << "\t" << motifIndex[prevMotifID];
+                        cout << motifID << "\t" << motifIndex[motifID];
                         for (int i = 0; i < 10; i++)
                                 cout << "\t" << counts[i];
                         cout << "\n";
 
                         orthoSpecComb.clear();
                         orthoGeneComb.clear();
-                        prevMotifID = motifID;
                 }
 
-                string seq = seqIndex[seqID];
-                auto range = seq2ortho.equal_range(seq);
-
-                for (auto it = range.first; it != range.second; it++) {
-                        orthoSpecComb[it->second].insert(gene2species(seq));
-                        orthoGeneComb[it->second].insert(seq);
-                }
+                motifID = nextMotifID;
         }
-
 
         ifs.close();
         ofs.close();
