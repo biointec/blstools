@@ -188,7 +188,7 @@ Ortho::Ortho(int argc, char ** argv)
                         orthoGeneComb[it->second].insert(seq);
                 }
 
-                if (motifID != nextMotifID) {
+                if ((motifID != nextMotifID) || (!ifs)) {
                         array<size_t, 10> counts = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
                         for (auto it : orthoSpecComb) {
                                 float BLS = pt.getBLS(it.second);
