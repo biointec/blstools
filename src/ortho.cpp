@@ -27,6 +27,13 @@
 
 using namespace std;
 
+std::ostream& operator<< (std::ostream& os, const OrthoGroup& og)
+{
+        for (auto it : og.genes)
+                os << it << "\n";
+        return os;
+}
+
 void Ortho::printUsage() const
 {
         cout << "Usage: blstools ortho [options] occurrences.input sequences.idx motifs.idx orthogroups.input phylotree.newick\n\n";
@@ -106,8 +113,8 @@ Ortho::Ortho(int argc, char ** argv)
         if (!ifs)
                 throw runtime_error("Could not open file: " + orthoFilename);
 
-        string temp, orthoname, seqName, motifName;
         while (ifs) {
+                string temp, orthoname, seqName, motifName;
                 ifs >> temp >> orthoname >> temp >> seqName;
                 if (!ifs)
                         break;
@@ -116,12 +123,10 @@ Ortho::Ortho(int argc, char ** argv)
         }
 
         // also insert the zma gene into the ortho group
-        for (auto it : orthoGroups) {
+        for (auto& it : orthoGroups) {
                 it.second.insert(it.first);
-                seq2ortho.insert(pair<string, string>(orthoname, orthoname));
+                seq2ortho.insert(pair<string, string>(it.first, it.first));
         }
-
-        cout << "Read " << orthoGroups.size() << " ortho groups." << endl;
 
         ifs.close();
 
@@ -131,6 +136,7 @@ Ortho::Ortho(int argc, char ** argv)
                 throw runtime_error("Could not open file: " + seqIdxFilename);
 
         while (ifs) {
+                string seqName, temp;
                 ifs >> seqName >> temp >> temp >> temp;
                 if (!ifs)
                         break;
@@ -145,6 +151,7 @@ Ortho::Ortho(int argc, char ** argv)
                 throw runtime_error("Could not open file: " + motifIdxFilename);
 
         while (ifs) {
+                string motifName;
                 ifs >> motifName;
                 if (!ifs)
                         break;
@@ -177,6 +184,7 @@ Ortho::Ortho(int argc, char ** argv)
 
         ifs >> motifID;
         while (ifs) {
+                string temp;
                 ifs >> seqID >> temp >> temp;
                 ifs >> nextMotifID;
 

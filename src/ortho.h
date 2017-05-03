@@ -41,6 +41,14 @@ public:
         size_t size() const {
                 return genes.size();
         }
+
+        /**
+         * Print ortho group to the screen
+         * @param os Output stream to add to
+         * @param og Ortho group to print
+         * @return Output stream with the matrix elements
+         */
+        friend std::ostream& operator<< (std::ostream& os, const OrthoGroup& og);
 };
 
 class Ortho
