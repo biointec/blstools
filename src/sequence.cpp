@@ -52,7 +52,7 @@ bool SeqBlock::isContiguous(const SeqPos& sp) const
 SeqPos SeqBlock::getSeqPos(size_t blockPos) const
 {
         // check the validity of the input parameter
-        assert (blockPos < block.size());
+        // assert (blockPos < block.size());
 
         // find the last marker less than or equal to blockPos
         auto it = block2seq.upper_bound(blockPos);
