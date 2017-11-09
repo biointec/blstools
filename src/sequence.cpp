@@ -89,9 +89,6 @@ void SeqBlock::append(const std::string& data, const SeqPos& sp)
 
 void SeqBlock::getSuffixBlock(SeqBlock& sb, size_t startPos)
 {
-        // check the validity of the input parameter
-        assert (startPos < block.size());
-
         sb.clear();
         sb.block = block.substr(startPos);
 
