@@ -76,6 +76,29 @@ void OrthoContainer::load(const string& filename)
         }
 }
 
+void OrthoContainer::makeHistogram(size_t numSpecies)
+{
+        vector<size_t> hist(numSpecies+1, 0);
+
+        for (const auto& it : orthoGroups) {
+                const OrthoGroup& og = it.second;
+                hist[og.getNumSpecies()]++;
+        }
+
+        for (size_t i = 1; i <= numSpecies; i++)
+                cout << "#orthogroups with " << i << " species: " << hist[i] << endl;
+
+        /*vector<size_t> hist2(numSpecies+10, 0);
+
+        for (const auto& it : orthoGroups) {
+                const OrthoGroup& og = it.second;
+                hist2[og.size()]++;
+        }
+
+        for (size_t i = 1; i <= numSpecies+10; i++)
+                cout << "#orthogroups with " << i << " sequences: " << hist2[i] << endl;*/
+}
+
 // ============================================================================
 // ORTHO MODULE
 // ============================================================================
@@ -151,6 +174,8 @@ Ortho::Ortho(int argc, char ** argv)
         OrthoContainer orthoContainer;
         orthoContainer.load(orthoFilename);
         cout << "Loaded " << orthoContainer.size() << " orthology groups\n";
+
+        orthoContainer.makeHistogram(speciesContainer.size());
 
          // D) process the phylogenetic tree
         ifstream ifs(phyloFilename.c_str());

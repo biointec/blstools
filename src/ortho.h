@@ -131,6 +131,10 @@ public:
                 return sequences.size();
         }
 
+        size_t getNumSpecies() const {
+                return species.size();
+        }
+
         std::set<std::string>::const_iterator seqBegin() const {
                 return sequences.begin();
         }
@@ -169,6 +173,8 @@ public:
          * Default Constructor
          */
         OrthoContainer() {}
+
+        void makeHistogram(size_t numSpecies);
 
         /**
          * Load the ortho container from disk
