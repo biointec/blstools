@@ -72,6 +72,21 @@ bool PhylogeneticTree::recFlagPaths(const set<string>& names)
         return flag;
 }
 
+set<string> PhylogeneticTree::getAllNames()
+{
+        set<string> names;
+
+        if (!branchName.empty())
+                names.insert(branchName);
+
+        for (auto& st : subTree) {
+                set<string> stNames = st.getAllNames();
+                names.insert(stNames.begin(), stNames.end());
+        }
+
+        return names;
+}
+
 void PhylogeneticTree::recUnflagRoot2LCA()
 {
         flag = false;

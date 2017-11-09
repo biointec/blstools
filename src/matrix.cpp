@@ -53,6 +53,23 @@ void Matrix<deci>::gemm(const Matrix &A, const Matrix &B, int rowB, int nColB)
                  B.data + rowB, &LDB, &zero, data, &m);
 }
 
+/**
+ * Specialized gemm function for deci types with BLAS
+ * @param A Left-hand n x p matrix
+ * @param B Right-hand p x m matrix
+ */
+template <>
+void Matrix<deci>::gemm(const Matrix &A, const SubMatrix<deci> &B)
+{
+        const deci zero = 0;
+        const deci one = 1;
+
+        int m = A.nRows(), n = B.nCols();
+        int LDA = A.nRows(), k = A.nCols(), LDB = B.getLD();
+        gemm_f77("N", "N", &m, &n, &k, &one, A.data, &LDA,
+                 B.getDataPtr(), &LDB, &zero, data, &m);
+}
+
 template <>
 double Matrix<dcomplex>::norm() const
 {
@@ -131,69 +148,4 @@ void Matrix<deci>::printSequence(size_t overlap) const
                 cout << endl;
         }
 
-}
-
-// ===========================================================================
-// VECTOR CLASS
-// ===========================================================================
-
-/**
- * Specialized copy function for deci complex types with BLAS
- * @param X Right-hand side vector
- */
-template <>
-void Vector<cplx>::copy(const Vector &X)
-{
-        // check dimensions
-        assert(X.size() == size());
-
-        // cblas_zcopy(size, X.data, 1, data, 1);
-        memcpy(data, X.data, size()*sizeof(cplx));
-}
-
-/**
- * Print vector elements to the output stream
- * @param os Output stream to add to
- * @param V Vector to print
- * @return Output stream with the vector elements
- */
-template <>
-std::ostream& operator<<(std::ostream& os, const Vector<cplx>& V)
-{
-        int oldPrec = os.precision();
-        os.precision(15);
-        for (int r = 0; r < V.size(); r++) {
-                cplx el = V.data[r];
-                os << real(el) << "\t" << imag(el) << endl;
-        }
-        os.precision(oldPrec);
-        return os;
-}
-
-template <>
-std::istream& operator>>(std::istream& is, const Vector<cplx>& V)
-{
-        for (int r = 0; r < V.size(); r++) {
-                double real, imag;
-                is >> real >> imag;
-                V.data[r] = cplx(real, imag);
-        }
-        return is;
-}
-
-/**
- * Print vector elements to the output stream
- * @param os Output stream to add to
- * @param V Vector to print
- * @return Output stream with the vector elements
- */
-template <>
-std::ostream& operator<<(std::ostream& os, const Vector<deci>& V)
-{
-        int oldPrec = os.precision();
-        os.precision(15);
-        for (int r = 0; r < V.size(); r++)
-                os << V.data[r] << endl;
-        os.precision(oldPrec);
-        return os;
 }

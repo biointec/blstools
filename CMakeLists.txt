@@ -21,7 +21,7 @@ CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
 if(COMPILER_SUPPORTS_CXX11)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 else()
-        message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a recent C++ compiler.")
+        message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a more recent C++ compiler.")
 endif()
 
 find_package(BLAS REQUIRED)
@@ -33,9 +33,9 @@ add_definitions(-DHAVE_CONFIG_H)
 
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/src")
 
-add_executable(blstools src/blstools.cpp src/bls.cpp src/phylotree.cpp
-        src/matrix.cpp src/pwmscan.cpp src/motif.cpp src/sequence.cpp
-        src/ortho.cpp)
+add_executable(blstools src/dict.cpp src/hist.cpp src/blstools.cpp src/bls.cpp
+        src/phylotree.cpp src/matrix.cpp src/pwmscan.cpp src/motif.cpp
+        src/sequence.cpp  src/ortho.cpp src/species.cpp)
 target_link_libraries(blstools ${BLAS_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
 install(TARGETS blstools RUNTIME DESTINATION bin)

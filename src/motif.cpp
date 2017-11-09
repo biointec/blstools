@@ -24,16 +24,119 @@
 
 #include <iostream>
 #include <algorithm>
+#include <numeric>
 
 #include "motif.h"
 
 using namespace std;
 
 // ============================================================================
+// SCORE HISTOGRAM
+// ============================================================================
+
+float ScoreHistogram::getAverage() const
+{
+        double sum = 0.0, total = 0.0;
+        for (size_t i = 0; i < numBins; i++) {
+                sum += ((0.5 + i) * width + minScore) * counts[i];
+                total += counts[i];
+        }
+
+        return sum / total;
+}
+
+float ScoreHistogram::getScoreCutoff(float pvalue) const
+{
+        // count the total number of observations in the histogram
+        double totObs = 0.0;
+        for (size_t i = 0; i < numBins; i++)
+                totObs += counts[i];
+
+        // compute the fraction of best observations
+        double bestObs = pvalue * totObs;
+
+        double curr = bestObs;
+        for (ssize_t i = numBins-1; i >= 0; i--) {
+                if (counts[i] < curr)
+                        curr -= counts[i];
+                else {
+                        double frac = curr / counts[i];
+                        float cutoffi = frac * i + (1.0-frac) * (i+1);
+                        return cutoffi * width + minScore;
+                }
+        }
+
+        return maxScore;
+}
+
+void ScoreHistogram::writeGNUPlotFile(const string& dir,
+                                      const string& baseFilename,
+                                      const string& label) const
+{
+        string filename = dir + baseFilename + ".dat";
+        ofstream ofs(filename.c_str());
+        if (!ofs)
+                throw runtime_error("Error: cannot write to file " + filename);
+
+        ofs << numBins << "\t" << minScore << "\t" << maxScore << "\n";
+        for (size_t i = 0; i < numBins; i++)
+                ofs << (0.5 + i) * width + minScore << "\t" << counts[i] << "\n";
+        ofs.close();
+
+        size_t maxy = 0;
+        for (size_t i = 0; i < numBins; i++)
+                maxy = max<size_t>(maxy, counts[i]);
+        maxy *= 1.1;
+
+        filename = dir + baseFilename + ".gnu";
+        ofs.open(filename.c_str());
+        if (!ofs)
+                throw runtime_error("Error: cannot write to file " + filename);
+
+        ofs << "set output \"" << baseFilename << ".ps\"\n";
+        ofs << "set key autotitle columnhead\n";
+        ofs << "set terminal postscript landscape\n";
+        ofs << "set terminal postscript noenhanced\n";
+        ofs << "set xrange [" << minScore << ":" << maxScore << "]\n";
+        ofs << "set yrange [" << 0 << ":" << maxy << "]\n";
+        ofs << "set xlabel \'PWM score\'" << endl;
+        ofs << "set ylabel \'count\'" << endl;
+        ofs << "plot \"" << baseFilename << ".dat\" using 1:2 title \'"
+            << label << "\' with boxes\n";
+
+        ofs.close();
+}
+
+void ScoreHistogram::loadHistogram(const std::string& dir,
+                                   const std::string& baseFilename)
+{
+        string filename = dir + baseFilename + ".dat";
+        ifstream ifs(filename.c_str());
+        if (!ifs)
+                throw runtime_error("Error: cannot read file " + filename + ". "
+                                    "Did you run the hist module?");
+
+        ifs >> numBins >> minScore >> maxScore;
+        width = (maxScore - minScore) / (float)numBins;
+        if (counts != NULL)
+                delete [] counts;
+        counts = new std::atomic<size_t>[numBins];
+
+        for (int i = 0; i < numBins; i++) {
+                float bin; size_t val;
+                ifs >> bin >> val;
+                counts[i] = val;
+        }
+
+        if (!ifs)
+                throw runtime_error("Unexpected end-of-file reached");
+}
+
+// ============================================================================
 // MOTIF
 // ============================================================================
 
-int char2idx(char c)
+size_t char2idx(char c)
 {
         if (c == 'A' || c == 'a')
                 return 0;
@@ -41,18 +144,38 @@ int char2idx(char c)
                 return 1;
         if (c == 'G' || c == 'g')
                 return 2;
-        return 3;
+        if (c == 'T' || c == 't')
+                return 3;
+        return 4;
 }
 
-void Motif::posFreq2PWM(const array<float, 4>& bgFreq)
+void Motif::PFM2PWM(const std::array<size_t, 4>& bgCounts, size_t pseudoCounts)
 {
-        for (auto& pos : motif) {
-                float totFreq = 0;
-                for (size_t i = 0; i < 4; i++)
-                        totFreq += pos[i];
+        // compute the background probability for ACGT
+        size_t bgTotCounts = accumulate(bgCounts.begin(), bgCounts.end(), 0);
+        bgTotCounts += 4 * pseudoCounts;
+        array<float, 4> bgProb;
+        for (size_t i = 0; i < 4; i++)
+                bgProb[i] = static_cast<double>(bgCounts[i] + pseudoCounts) / bgTotCounts;
 
-                for (size_t i = 0; i < 4; i++)
-                        pos[i] = log2((pos[i] + 1) / (totFreq + 4) / bgFreq[i]);
+        // if the motif is a reverse-complementary motif, also complement the bgProb
+        if (revComp) {
+                swap<float>(bgProb[0], bgProb[3]);
+                swap<float>(bgProb[1], bgProb[2]);
+        }
+
+        // compute the PWM
+        PWM.resize(PFM.size());
+        for (size_t i = 0; i < PFM.size(); i++) {
+                size_t totCounts = accumulate(PFM[i].begin(), PFM[i].end(), 0);
+                totCounts += 4 * pseudoCounts;
+
+                for (size_t j = 0; j < 4; j++) {
+                        // compute the PPM
+                        PWM[i][j] = static_cast<double>(PFM[i][j] + pseudoCounts) / totCounts;
+                        // and convert to PWM
+                        PWM[i][j] = log2(PWM[i][j] / bgProb[j]);
+                }
         }
 }
 
@@ -63,8 +186,9 @@ float Motif::getScore(const std::string& pattern) const
 
         float score = 0.0;
         for (size_t i = 0; i < pattern.size(); i++) {
-                //cout << pattern[i] << " " << motif[i][char2idx(pattern[i])] << endl;
-                score += motif[i][char2idx(pattern[i])];
+                size_t j = char2idx(pattern[i]);
+                if (j < 4)      // if ACTG character
+                        score += PWM[i][j];
         }
 
         return score;
@@ -74,7 +198,7 @@ float Motif::getMaxScore() const
 {
         float maxScore = 0.0;
 
-        for (auto& pos : motif) {
+        for (auto& pos : PWM) {
                 float maxAC = max<float>(pos[0], pos[1]);
                 float maxGT = max<float>(pos[2], pos[3]);
                 maxScore += max<float>(maxAC, maxGT);
@@ -87,7 +211,7 @@ float Motif::getMinScore() const
 {
         float minScore = 0.0;
 
-        for (auto& pos : motif) {
+        for (auto& pos : PWM) {
                 float minAC = min<float>(pos[0], pos[1]);
                 float minGT = min<float>(pos[2], pos[3]);
                 minScore += min<float>(minAC, minGT);
@@ -96,22 +220,31 @@ float Motif::getMinScore() const
         return minScore;
 }
 
-
 void Motif::revCompl()
 {
-        reverse(motif.begin(), motif.end());
+        // reverse complement the position frequency matrix
+        reverse(PFM.begin(), PFM.end());
 
-        for (size_t i = 0; i < motif.size(); i++) {
-                array<float, 4> copy = motif[i];
-                motif[i] = array<float, 4>{copy[3], copy[2], copy[1], copy[0]};
+        for (size_t i = 0; i < PFM.size(); i++) {
+                array<size_t, 4> copy = PFM[i];
+                PFM[i] = array<size_t, 4>{copy[3], copy[2], copy[1], copy[0]};
         }
 
+        // reverse complement the position weight matrix
+        reverse(PWM.begin(), PWM.end());
+
+        for (size_t i = 0; i < PWM.size(); i++) {
+                array<float, 4> copy = PWM[i];
+                PWM[i] = array<float, 4>{copy[3], copy[2], copy[1], copy[0]};
+        }
+
+        revComp = !revComp;
 }
 
 ostream& operator<< (ostream& os, const Motif& m)
 {
         os << m.name << "\n";
-        for (auto pos : m.motif)
+        for (auto pos : m.PWM)
                 os << pos[0] << " " << pos[1] << " " << pos[2] << " " << pos[3] << "\n";
         return os;
 }
@@ -120,85 +253,67 @@ ostream& operator<< (ostream& os, const Motif& m)
 // MOTIF CONTAINER
 // ============================================================================
 
-MotifContainer::MotifContainer(const std::string& filename,
-                               const std::array<float, 5>& bgFreq)
+MotifContainer::MotifContainer(const std::string& filename, bool loadPermutations)
 {
         ifstream ifs(filename.c_str());
         if (!ifs)
                 throw runtime_error("Could not open file: " + filename);
 
+        vector<Motif> allMotifs; size_t motifID = 0;
         while (ifs.good()) {
                 string temp;
                 getline(ifs, temp);
                 if (temp.empty())
                         continue;
                 if (temp.front() == '>') {      // add a new motif
-                        motifs.push_back(Motif(temp.substr(1)));
+                        allMotifs.push_back(Motif(temp.substr(1), motifID++));
                         continue;
                 }
                 istringstream iss(temp);
-                int a, b, c, d;
-                iss >> a >> b >> c >> d;
+                size_t A, C, G, T;
+                iss >> A >> C >> G >> T;
 
-                motifs.back().addCharacter({(float)a, (float)b, (float)c, (float)d});
+                allMotifs.back().addCharacter({A, C, G, T});
+        }
+
+        // copy the temporary allmotifs structure to motifs
+        for (const auto& motif : allMotifs) {
+                if (loadPermutations || !motif.isPermutation())
+                        motifs.push_back(motif);
         }
 
         ifs.close();
-
-        for (auto& m : motifs)
-                m.posFreq2PWM({0.25, 0.25, 0.25, 0.25}/*{bgFreq[0], bgFreq[1], bgFreq[2], bgFreq[3]}*/);
 }
 
-void MotifContainer::generateMatrix(Matrix<float>& P,
-                                    vector<size_t>& row2MotifID, bool revCompl)
+void MotifContainer::addReverseComplements()
+{
+        vector<Motif> copy = motifs;
+        motifs.clear();
+
+        for (Motif& m : copy) {
+                motifs.push_back(m);
+                m.revCompl();
+                motifs.push_back(m);
+        }
+}
+
+void MotifContainer::generateMatrix()
 {
         // allocate memory for matrix P
         size_t m = motifs.size();
-        if (revCompl)
-                m = m * 2;
-
         size_t k = 4 * getMaxMotifLen();
 
         P.setDimensions(m, k);
         P.allocateMemory(0);
 
         // fill the matrix
-        for (size_t motifID = 0, row = 0; motifID < motifs.size(); motifID++) {
+        for (size_t i = 0; i < motifs.size(); i++) {
                 // fill in the forward motif
-                const Motif& fwd = motifs[motifID];
+                const Motif& fwd = motifs[i];
                 for (size_t j = 0; j < fwd.size(); j++)
                         for (size_t o = 0; o < 4; o++)
-                                P(row, 4*j+o) = fwd[j][o];
-                row++;
-                row2MotifID.push_back(motifID);
-
-                // fill in the reverse motif
-                if (!revCompl)
-                        continue;
-
-                Motif bwd = fwd;
-                bwd.revCompl();
-                for (size_t j = 0; j < bwd.size(); j++)
-                        for (size_t o = 0; o < 4; o++)
-                                P(row, 4*j+o) = bwd[j][o];
-                row++;
-                row2MotifID.push_back(motifID);
-        }
-}
-
-void MotifContainer::setRelThreshold(float relThreshold)
-{
-        threshold.clear();
-        threshold.reserve(motifs.size());
-
-        for (const auto& m : motifs) {
-                float maxScore = m.getMaxScore();
-                float minScore = m.getMinScore();
-
-                threshold.push_back(relThreshold * (maxScore - minScore) + minScore);
-
-                //cout << "Motif " << m.getName() << "[min: " << minScore
-                //     << ", max: " << maxScore << ", th: " << threshold.back() << "]" << endl;
+                                P(i, 4*j+o) = fwd[j][o];
+                row2MotifID.push_back(i);
         }
 }
 
@@ -243,18 +358,10 @@ size_t MotifContainer::getMaxMotifLen() const
 // MOTIF OCCURRENCES
 // ============================================================================
 
-MotifOccurrence::MotifOccurrence(size_t motifID_, size_t sequenceID_,
-                                 size_t sequencePos_, float score_) :
-                                 motifID(motifID_), sequenceID(sequenceID_),
-                                 sequencePos(sequencePos_), score(score_)
-{
-}
-
 ostream& operator<< (ostream& os, const MotifOccurrence& m)
 {
-        //os << "Seq ID: " << m.sequenceID << ", seq pos: " << m.sequencePos
-        //   << ", motif ID: " << m.getMotifID() << ", score:" << m.score;
         os << m.getMotifID() << "\t" << m.getSequenceID() << "\t"
-           << m.getSequencePos() << "\t" << "\t" << m.getScore();
+           << m.getSequencePos() << "\t"  << m.getStrand()
+           << "\t" << m.getScore();
         return os;
 }

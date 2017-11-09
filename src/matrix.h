@@ -29,19 +29,13 @@
 // ===========================================================================
 
 template <class T>
-class Vector;
-
-template <class T>
 class Matrix;
 
 template <class T>
+class SubMatrix;
+
+template <class T>
 std::ostream& operator<<(std::ostream& os, const Matrix<T>& M);
-
-template <class T>
-std::ostream& operator<<(std::ostream& os, const Vector<T>& V);
-
-template <class T>
-std::istream& operator>>(std::istream& is, const Vector<T>& V);
 
 // ===========================================================================
 // MATRIX CLASS
@@ -85,13 +79,6 @@ public:
          * @param M Matrix to copy
          */
         Matrix(const Matrix& M);
-
-        /**
-         * Reinterpret vector as a matrix (shallow copy)
-         * @param V Original vector
-         * @param nCols Number of columns
-         */
-        Matrix(const Vector<T>& V, int nCols);
 
         /**
          * Matrix destructor
@@ -143,53 +130,6 @@ public:
         T& operator()(int row, int col) const;
 
         /**
-         * Overloaded assignment operator
-         * @param M Right hand side matrix
-         * @return Reference to the lvalue matrix
-         */
-        Matrix& operator=(const Matrix& M);
-
-        /**
-         * Matrix-matrix multiplication
-         * @param M Right hand side matrix
-         * @return Product of the two matrices
-         */
-        const Matrix operator*(const Matrix &M);
-
-        /**
-         * Matrix-matrix addition
-         * @param M Right hand side matrix
-         * @return Sum of the two matrices
-         */
-        const Matrix operator+(const Matrix &M);
-
-        /**
-         * Matrix-matrix subtraction
-         * @param M Right hand side matrix
-         * @return Difference of the two matrices
-         */
-        const Matrix operator-(const Matrix &M);
-
-        /**
-         * Matrix-matrix addition
-         * @param M Right hand side vector
-         */
-        void operator+=(const Matrix &M);
-
-        /**
-         * Scaling of a matrix
-         * @param M Right hand size element
-         */
-        void operator*=(const T &M);
-
-        /**
-         * Matrix-vector multiplication
-         * @param V Right hand side matrix
-         * @return Product of the matrix-vector
-         */
-        const Vector<T> operator*(const Vector<T> &V);
-
-        /**
          * Print matrix elements to the output stream
          * @param os Output stream to add to
          * @param M Matrix to print
@@ -211,11 +151,6 @@ public:
         void fill(const T& el);
 
         /**
-         * Calculate the inverse of the matrix
-         */
-        void invert();
-
-        /**
          * Perform a matrix-matrix multiplication A * submatrix(B)
          * @param A Left-hand m x k matrix
          * @param B Right-hand K x n matrix (K >= k)
@@ -223,12 +158,18 @@ public:
          * @param nColB Number of column of B to consider
          */
         void gemm(const Matrix &A, const Matrix &B, int rowB, int nColB);
+        /**
+         * Perform a matrix-matrix multiplication A * submatrix(B)
+         * @param A Left-hand m x k matrix
+         * @param B Right-hand K x n matrix (K >= k)
+         */
+        void gemm(const Matrix &A, const SubMatrix<T> &B);
 
         /** returns the 2-norm of the matrix
         */
         double norm() const;
 
-        friend class Vector<T>;
+        friend class SubMatrix<T>;
 };
 
 template <class T>
@@ -266,19 +207,9 @@ Matrix<T>::Matrix(const Matrix& M)
 }
 
 template <class T>
-Matrix<T>::Matrix(const Vector<T>& V, int nCols)
-{
-        assert(V.isInitialized());
-        assert(nCols > 0);
-        data = V.data;
-        rows = -V.size()/nRows;
-        cols = -nCols;
-}
-
-template <class T>
 Matrix<T>::~Matrix()
 {
-        if ((rows > 0) && (cols > 0))
+        if (data != NULL)
                delete [] data;
 }
 
@@ -327,102 +258,6 @@ inline T& Matrix<T>::operator()(int row, int col) const
 }
 
 template <class T>
-Matrix<T>& Matrix<T>::operator=(const Matrix& M)
-{
-        assert(M.isInitialized());
-        // check for self-assignment
-        if (&M == this) return *this;
-        // if the dimensions do not match: change them
-        if ((nRows() != M.nRows()) || (nCols() != M.nCols())) {
-                if ((rows > 0) && (cols > 0)) delete [] data;
-                rows = M.nRows();
-                cols = M.nCols();
-                data = new T[rows*cols];
-        }
-        // copy element per element
-        for (int i = 0; i < rows*cols; i++)
-                data[i] = M.data[i];
-        return *this;
-}
-
-template <class T>
-const Matrix<T> Matrix<T>::operator*(const Matrix &M)
-{
-        assert(isInitialized());
-        assert(M.isInitialized());
-        assert(nCols() == M.nRows());
-        Matrix result(nRows(), M.nCols(), 0);
-
-        for (int i = 0; i < nRows(); i++) {
-                for (int j = 0; j < M.nCols(); j++)
-                        for(int k = 0; k < nCols(); k++)
-                                result(i, j) += (*this)(i, k)*M(k, j);
-        }
-        return result;
-}
-
-template <class T>
-const Matrix<T> Matrix<T>::operator+(const Matrix &M)
-{
-        assert(isInitialized());
-        assert(M.isInitialized());
-        assert(nCols() == M.nCols());
-        assert(nRows() == M.nRows());
-        Matrix result(nRows(), nCols());
-
-        for (int i = 0; i < nRows()*nCols(); i++)
-                result.data[i] = data[i] + M.data[i];
-        return result;
-}
-
-template <class T>
-void Matrix<T>::operator+=(const Matrix &M)
-{
-        assert(isInitialized());
-        assert(M.isInitialized());
-        assert(nCols() == M.nCols());
-        assert(nRows() == M.nRows());
-        for (int i = 0; i < nRows()*nCols(); i++)
-                data[i] += M.data[i];
-}
-
-template <class T>
-void Matrix<T>::operator*=(const T &M)
-{
-        assert(isInitialized());
-        for (int i = 0; i < nRows()*nCols(); i++)
-                data[i] *= M;
-}
-
-template <class T>
-const Matrix<T> Matrix<T>::operator-(const Matrix &M)
-{
-        assert(isInitialized());
-        assert(M.isInitialized());
-        assert(nCols() == M.nCols());
-        assert(nRows() == M.nRows());
-        Matrix result(nRows(), nCols());
-
-        for (int i = 0; i < nRows()*nCols(); i++)
-                result.data[i] = data[i] - M.data[i];
-        return result;
-}
-
-template <class T>
-const Vector<T> Matrix<T>::operator*(const Vector<T> &V)
-{
-        assert(isInitialized());
-        assert(nCols() == V.size());
-        Vector<T> result(nRows(), 0);
-
-        for (int i = 0; i < nRows(); i++) {
-                for (int j = 0; j < nCols(); j++)
-                        result(i) += (*this)(i, j)*V(j);
-        }
-        return result;
-}
-
-template <class T>
 void Matrix<T>::fill(const T& el)
 {
         assert(isInitialized());
@@ -431,337 +266,64 @@ void Matrix<T>::fill(const T& el)
 }
 
 // ===========================================================================
-// VECTOR CLASS
+// SUBMATRIX CLASS
 // ===========================================================================
 
-/**
- * Generic template vector class with some specialized functions for
- * the complex deci type which use the BLAS and LAPACK.
- */
 template <class T>
-class Vector
+class SubMatrix
 {
 public:
-        int sz;        // number of elements
-        T *data;       // actual storage for the elements
+        const Matrix<T>& M;     // parent matrix
+        int firstRow;           // first row index
+        int rows;               // number of rows
+        int firstCol;           // first colum index
+        int cols;               // number of columns
 
 public:
         /**
          * Default constructor
          */
-        Vector();
+        SubMatrix(const Matrix<T>& M, int firstRow, int nRows, int firstCol,
+                  int nCols) : M(M), firstRow(firstRow), rows(nRows),
+                  firstCol(firstCol), cols(nCols) {}
 
         /**
-         * Create a vector of a certain size
-         * @param size Number of elements in the vector
+         * Retrieve the number of rows in the matrix
+         * @return Number of rows
          */
-        Vector(int size);
+        int nRows() const { return abs(rows); }
 
         /**
-         * Create a vector of a certain size and initialize it
-         * @param size Number of elements in the vector
-         * @param el Initializer object
+         * Retrieve the number of columns in the matrix
+         * @return Number of columns
          */
-        Vector(int size, const T& el);
+        int nCols() const { return abs(cols); }
 
         /**
-         * Copy constructor for vector
-         * @param V Vector to copy
+         * Retrieve the first row of the submatrix
+         * @return First rows
          */
-        Vector(const Vector& V);
+        int getFirstRow() const { return firstRow; }
 
         /**
-         * Get a subvector (shallow copy)
-         * @param V Original vector
-         * @param first First element
-         * @param last Last element
+         * Retrieve the first columns of the submatrix
+         * @return First column
          */
-        Vector(const Vector& V, int first, int last);
+        int getFirstCol() const { return firstCol; }
 
         /**
-         * Create a vector wrapped from T pointer
-         * @param Data Pointer to the data
-         * @param size Number of elements
+         * Retrieve the leading dimensions
+         * @return Leading dimensions
          */
-        Vector(T *data, int size);
+        int getLD() const { return M.nRows(); };
 
         /**
-         * Vector destructor
+         * Get the data pointer to the first element of the submatrix
+         *
          */
-        ~Vector();
-
-        /**
-         * Return the size of the vector
-         * @return Size of the vector
-         */
-        int size() const { return abs(sz); };
-
-        /**
-         * Set the size of the vector without initializing memory
-         * @param size Number of elements in the vector
-         */
-        void setDimensions(int size);
-
-        /**
-         * Allocate memory for the vector
-         */
-        void allocateMemory();
-
-        /**
-         * Allocate memory for the vector and initialize it
-         * @param el Initializer object
-         */
-        void allocateMemory(const T& el);
-
-        /**
-         * Returns true if the data pointer has been initialized
-         * @return True of false
-         */
-        bool isInitialized() const;
-
-        /**
-          * Overloaded parentheses to access/modify elements
-          * @param row Row specification
-          * @return Element at specified position
-          */
-        T& operator()(int row) const;
-
-        /**
-          * Overloaded brackets to access/modify elements
-          * @param row Row specification
-          * @return Element at specified position
-          */
-        T& operator[](int row) const;
-
-        /**
-         * Overloaded assignment operator
-         * @param V Right hand side vector
-         * @return Reference to the lvalue vector
-         */
-        Vector& operator=(const Vector& V);
-
-        /**
-         * Vector-vector addition
-         * @param V Right hand side vector
-         * @return Sum of the two vectors
-         */
-        const Vector operator+(const Vector &V);
-
-        /**
-         * Vector-vector subtraction
-         * @param V Right hand side vector
-         * @return Subtraction of the two vectors
-         */
-        const Vector operator-(const Vector &V);
-
-        /**
-         * Scaling of a vector
-         * @param V Right hand size element
-         */
-        void operator*=(const T &V);
-
-        /**
-         * Print vector elements to the output stream
-         * @param os Output stream to add to
-         * @param V Vector to print
-         * @return Output stream with the vector elements
-         */
-        friend std::ostream& (::operator<< <>)(std::ostream& os,
-                                               const Vector& V);
-
-        /**
-         * Load vector elements to from output stream
-         * @param is Input stream to add to
-         * @param V Vector to load
-         * @return Input stream the vector elements removed
-         */
-        friend std::istream& (::operator>> <>)(std::istream& is,
-                                               const Vector& V);
-
-        /**
-         * Fill the vector with a certain element
-         * @param el Element to fill the vector with
-         */
-        void fill(const T& el);
-
-        /**
-         * Copy vector X to vector Y
-         * @param X Right-hand vector
-         */
-        void copy(const Vector &X);
-
-        friend class Matrix<T>;
+        T* getDataPtr() const {
+                return M.data + firstCol * M.nRows() + firstRow;
+        }
 };
-
-template <class T>
-Vector<T>::Vector() : sz(0), data(NULL)
-{
-
-}
-
-template <class T>
-Vector<T>::Vector(int size) : sz(size)
-{
-        assert(sz >= 0);
-        if (sz == 0) return;
-        data = new T[sz];
-}
-
-template <class T>
-Vector<T>::Vector(int size, const T& el) : sz(size)
-{
-        assert(sz >= 0);
-        if (sz == 0) return;
-        data = new T[sz];
-        fill(el);
-}
-
-template <class T>
-Vector<T>::Vector(const Vector& V)
-{
-        assert(V.isInitialized());
-        sz = V.size();
-        data = new T[sz];
-        for (int i = 0; i < sz; i++)
-                data[i] = V.data[i];
-}
-
-template <class T>
-Vector<T>::Vector(const Vector& V, int first, int last)
-{
-        assert(V.isInitialized());
-        assert(first <= last);
-        assert(first >= 0);
-        assert(last = V.size());
-        data = V.data + first;
-        sz = -(last-first+1);
-}
-
-template <class T>
-Vector<T>::Vector(T *data_, int size)
-{
-        assert(size > 0);
-        if (size == 0) return;
-        data = data_;
-        sz = -size;
-}
-
-template <class T>
-Vector<T>::~Vector()
-{
-        if (sz > 0)
-                delete [] data;
-}
-
-template <class T>
-void Vector<T>::setDimensions(int size)
-{
-        // delete data
-        if (sz > 0) {
-                delete [] data;
-                data = NULL;
-        }
-
-        assert(size >= 0);
-        sz = size;
-}
-
-template <class T>
-void Vector<T>::allocateMemory()
-{
-        assert(data == NULL);
-        if (sz > 0)
-                data = new T[sz];
-}
-
-template <class T>
-void Vector<T>::allocateMemory(const T& el)
-{
-        allocateMemory();
-        fill(el);
-}
-
-template <class T>
-bool Vector<T>::isInitialized() const
-{
-        if (sz == 0) return true;
-        return (data != NULL);
-}
-
-template <class T>
-inline T& Vector<T>::operator()(int row) const
-{
-        assert(isInitialized());
-        assert(row >= 0); assert(row < size());
-        return data[row];
-}
-
-template <class T>
-inline T& Vector<T>::operator[](int row) const
-{
-        assert(isInitialized());
-        assert(row >= 0); assert(row < size());
-        return data[row];
-}
-
-template <class T>
-Vector<T>& Vector<T>::operator=(const Vector& V)
-{
-        assert(V.isInitialized());
-        // check for self-assignment
-        if (&V == this) return *this;
-        // if the dimension does not match: change it
-        if (size() != V.size()) {
-                if (sz > 0) delete [] data;
-                sz = V.size();
-                data = new T[sz];
-        }
-
-        for (int i = 0; i < sz; i++)
-                data[i] = V.data[i];
-        return *this;
-}
-
-template <class T>
-const Vector<T> Vector<T>::operator+(const Vector &V)
-{
-        assert(isInitialized());
-        assert(V.isInitialized());
-        assert(size() == V.size());
-        Vector result(size());
-
-        for (int i = 0; i < size(); i++)
-                result.data[i] = data[i] + V.data[i];
-        return result;
-}
-
-template <class T>
-const Vector<T> Vector<T>::operator-(const Vector &V)
-{
-        assert(isInitialized());
-        assert(V.isInitialized());
-        assert(size() == V.size());
-        Vector result(size());
-
-        for (int i = 0; i < size(); i++)
-                result.data[i] = data[i] - V.data[i];
-        return result;
-}
-
-template <class T>
-void Vector<T>::operator*=(const T &E)
-{
-        assert(isInitialized());
-        for (int i = 0; i < size(); i++)
-                data[i] *= E;
-}
-
-template <class T>
-void Vector<T>::fill(const T& el)
-{
-        assert(isInitialized());
-        for (int i = 0; i < size(); i++)
-                data[i] = el;
-}
 
 #endif

@@ -1,0 +1,77 @@
+/***************************************************************************
+ *   Copyright (C) 2017 Jan Fostier (jan.fostier@ugent.be)                 *
+ *   This file is part of BLStools                                         *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+#ifndef PWM_H
+#define PWM_H
+
+#include <vector>
+
+// ============================================================================
+// CLASS PROTOTYPES
+// ============================================================================
+
+class Species;
+class MotifContainer;
+class FastaBatch;
+class ScoreHistogram;
+class SeqMatrix;
+
+template <class T> class Matrix;
+
+// ============================================================================
+// HISTOGRAM MODULE
+// ============================================================================
+
+class Histogram
+{
+private:
+        /**
+         * Print module instructions
+         */
+        void printUsage() const;
+
+        void extractObsScore(const Matrix<float>& R, size_t offset,
+                             const SeqMatrix& sm,
+                             const MotifContainer& motifContainer,
+                             std::vector<ScoreHistogram>& histContainer);
+
+        void histThread(const MotifContainer& motifs,
+                        FastaBatch& fb, std::vector<ScoreHistogram>& histContainer);
+
+        void generateHistogram(const Species& species,
+                               const MotifContainer& MotifContainer,
+                               std::vector<ScoreHistogram>& histContainer);
+
+        size_t maxLength;       // maximum length of sequence data to analyze
+        size_t numBins;         // number of bins per histogram
+        std::string histdir;    // histogram directory
+        size_t numThreads;      // number of threads
+        size_t pseudocounts;    // pseudocounts of PWM computation
+
+public:
+        /**
+         * Constructor (run Histogram module)
+         * @param argc Command line argument count
+         * @param argv Command line argument values
+         */
+        Histogram(int argc, char **argv);
+};
+
+#endif

@@ -32,34 +32,90 @@ using namespace std;
 // SEQUENCE BLOCK
 // ============================================================================
 
+bool SeqBlock::isContiguous(const SeqPos& sp) const
+{
+        // if there is nothing to compare with: no
+        if (block2seq.empty())
+                return false;
+
+        // if it's a difference sequence: no
+        const SeqPos& last = block2seq.rbegin()->second;
+        if (last.getSeqIndex() != sp.getSeqIndex())
+                return false;
+
+        // if it's continguous
+        size_t blockDelta = block.size() - block2seq.rbegin()->first;
+        size_t seqDelta = sp.getSeqPos() - last.getSeqPos();
+        return (blockDelta == seqDelta);
+}
+
+SeqPos SeqBlock::getSeqPos(size_t blockPos) const
+{
+        // check the validity of the input parameter
+        assert (blockPos < block.size());
+
+        // find the last marker less than or equal to blockPos
+        auto it = block2seq.upper_bound(blockPos);
+        assert(it != block2seq.begin());
+        it--;   // now contains last marker <= blockPos
+
+        // now return the sequence position
+        const SeqPos& last = it->second;
+        size_t blockDelta = blockPos - it->first;
+        return SeqPos(last.getSeqIndex(), last.getSeqPos() + blockDelta);
+}
+
+size_t SeqBlock::getRemainingSeqLen(size_t blockPos) const
+{
+        // check the validity of the input parameter
+        assert (blockPos < block.size());
+
+        // find the last marker less than or equal to blockPos
+        auto it = block2seq.upper_bound(blockPos);
+        assert(it != block2seq.begin());
+
+        size_t nxtBlockPos = (it == block2seq.end()) ? block.size() : it->first;
+        return nxtBlockPos - blockPos;
+}
+
+void SeqBlock::append(const std::string& data, const SeqPos& sp)
+{
+        // if necessary, insert a new marker
+        if (!isContiguous(sp))
+                block2seq[block.size()] = sp;
+
+        block.append(data);
+}
+
 void SeqBlock::getSuffixBlock(SeqBlock& sb, size_t startPos)
 {
-        // if the current block is too small, get out
-        if (startPos > size())
-                return;
+        // check the validity of the input parameter
+        assert (startPos < block.size());
 
         sb.clear();
         sb.block = block.substr(startPos);
 
+        // find the last marker less than or equal to startPos
         auto it = block2seq.upper_bound(startPos);
         assert(it != block2seq.begin());
         --it;
 
         // copy the primary sequence marker
+        size_t blockDelta = startPos - it->first;
         sb.block2seq[0] = SeqPos(it->second.getSeqIndex(),
-                                 it->second.getSeqPos() + startPos - it->first);
+                                 it->second.getSeqPos() + blockDelta);
 
         // copy the remainder of sequence markers (if any)
-        for (it++ ; it != block2seq.end(); it++)
-                sb.block2seq[it->first-startPos] = it->second;
+        for (it++; it != block2seq.end(); it++)
+                sb.block2seq[it->first - startPos] = it->second;
 }
 
 std::ostream& operator<< (std::ostream& os, const SeqBlock& sb)
 {
-        os << sb.block << endl;
+        os << sb.block << "\n";
         for (auto el : sb.block2seq)
                 os << el.first << ": (" << el.second.getSeqIndex()
-                   << ", " << el.second.getSeqPos() << ")" << endl;
+                   << ", " << el.second.getSeqPos() << ")" << "\n";
         return os;
 }
 
@@ -86,135 +142,161 @@ bool FastaBatch::moveToNextFile()
         return true;
 }
 
-bool FastaBatch::getNextLine(std::string& line, size_t& seqIdx, size_t& seqPos)
+bool FastaBatch::getNextLine(std::string& line, SeqPos& seqPos)
 {
         while (true) {
+                // move to the next file if necessary
                 if (!getline(_ifs, line))
                         if (!moveToNextFile())
                                 return false;
 
+                // skip empty lines
                 if (line.empty())
                         continue;
 
+                // skip fasta sequence descriptor lines
                 if (line.front() == '>') {
                         _currSeqLen = 0;
-                        _seqNames.push_back(line.substr(1));
+                        istringstream iss(line.substr(1));
+                        string seqName;
+                        iss >> seqName;
+                        _seqNames.push_back(seqName);
                         continue;
                 }
 
-                assert(!_seqNames.empty());
-
-                seqIdx = _seqNames.size() - 1;
-                seqPos = _currSeqLen;
-
-                _totSeqLen += line.size();
-                _currSeqLen += line.size();
-                return true;
+                // at this point we have a non-empty sequence line
+                break;
         }
+
+        // check for fasta format
+        if (_seqNames.empty())
+                throw runtime_error("Input file does not appear to be in fasta format\n");
+
+        // set the sequence position
+        seqPos = SeqPos(_seqNames.size() - 1, _currSeqLen);
+
+        _totSeqLen += line.size();
+        _currSeqLen += line.size();
 
         return true;
 }
 
-void FastaBatch::addFile(const string& filename)
+void FastaBatch::filterLine(const string& line, const SeqPos& seqPos,
+                            deque<std::string>& filtLine,
+                            deque<SeqPos>& filtSeqPos) const
 {
-        ifstream ifs(filename.c_str());
-        if (!ifs)
-                throw runtime_error("Could not open file: " + filename);
+        SeqPos currSeqPos = seqPos;
+        bool isOpen = false;
 
-        seqFiles.push_back(filename);
-}
+        for (size_t i = 0; i < line.size(); i++) {
+                bool isValid = ((line[i] == 'A') || (line[i] == 'a') ||
+                                (line[i] == 'C') || (line[i] == 'c') ||
+                                (line[i] == 'G') || (line[i] == 'g') ||
+                                (line[i] == 'T') || (line[i] == 't'));
 
-void FastaBatch::addList(const std::string& listname)
-{
-        ifstream ifs(listname.c_str());
-        if (!ifs)
-                throw runtime_error("Could not open file: " + listname);
+                // open a sequence stream
+                if (isValid && !isOpen) {
+                        filtSeqPos.push_back(currSeqPos);
+                        isOpen = true;
+                }
 
-        // read all files from the list and check for their existance
-        while (ifs) {
-                string filename;
-                getline(ifs, filename);
-                if (filename.empty())
-                        continue;
+                // close a sequence stream
+                if (!isValid && isOpen) {
+                        size_t start = filtSeqPos.back().getSeqPos();
+                        size_t end = currSeqPos.getSeqPos();
+                        filtLine.push_back(line.substr(start, end-start));
+                        isOpen = false;
+                }
 
-                ifstream fn(filename);
-                if (!fn)
-                        throw runtime_error("Could not open fasta file: " + filename);
+                currSeqPos.incSeqPos();
+        }
 
-                seqFiles.push_back(filename);
+        // also store the trailing line
+        if (isOpen) {
+                size_t start = filtSeqPos.back().getSeqPos();
+                filtLine.push_back(line.substr(start, line.size() - start));
         }
 }
 
-void FastaBatch::calcBGFrequencies()
+bool FastaBatch::appendNextBlock(SeqBlock& block, size_t maxSize)
 {
-        for (size_t i = 0; i < 256; i++)
-                char2Idx[i] = 4;
-        char2Idx[(unsigned short)'A'] = 0;
-        char2Idx[(unsigned short)'a'] = 0;
-        char2Idx[(unsigned short)'C'] = 1;
-        char2Idx[(unsigned short)'c'] = 1;
-        char2Idx[(unsigned short)'G'] = 2;
-        char2Idx[(unsigned short)'g'] = 2;
-        char2Idx[(unsigned short)'T'] = 3;
-        char2Idx[(unsigned short)'t'] = 3;
+        bool retVal = false;
+        // reduce maxSize in order not to exceed to total maximum filtered content size
+        maxSize = min<size_t>(maxSize, _maxFiltSeqLen - _totFiltSeqLen + block.size());
 
-        std::array<size_t, 5> nuclCount;
-        nuclCount.fill(0);
-
-        string line; size_t dummy;
-        while (getNextLine(line, dummy, dummy)) {
-                for (auto c : line)
-                        nuclCount[char2Idx[(unsigned short)c]]++;
-        }
-
-        for (size_t i = 0; i < 5; i++)
-                nucleotideFreq[i] = (float)nuclCount[i] / (float)_totSeqLen;
-}
-
-void FastaBatch::writeSeqNames(const std::string& filename)
-{
-        ofstream ofs(filename.c_str());
-
-        for (auto it : _seqNames)
-                ofs << it << "\n";
-
-        ofs.close();
-}
-
-bool FastaBatch::getNextBlock(SeqBlock& block, size_t maxSize)
-{
-        // first copy from the active sequence (sequence data previously read)
-        size_t thisSize = min<size_t>(maxSize - block.size(), _actSeq.size() - _actPos);
-        block.append(_actSeq.substr(_actPos, thisSize),
-                     SeqPos(_actSeqIdx, _actSeqPos + _actPos));
-        _actPos += thisSize;
-
-        // read additional data from disk
         while (block.size() < maxSize) {
-                _actPos = 0;
-                if (!getNextLine(_actSeq, _actSeqIdx, _actSeqPos))
-                        return !block.empty();
+                // get more sequence data if necessary
+                while (_filtSeqv.empty()) {
+                        string tmp; SeqPos tmpSeqPos;
+                        if (!getNextLine(tmp, tmpSeqPos))
+                                return retVal;
+                        filterLine(tmp, tmpSeqPos, _filtSeqv, _filtSeqPosv);
+                }
 
-                thisSize = min<size_t>(maxSize - block.size(), _actSeq.size());
-                block.append(_actSeq.substr(0, thisSize),
-                             SeqPos(_actSeqIdx, _actSeqPos));
-                _actPos = thisSize;
+                // copy filtered sequence data onto seqPos
+                size_t thisSize = min<size_t>(_filtSeqv.front().size(),
+                                              maxSize - block.size());
+                block.append(_filtSeqv.front().substr(0, thisSize),
+                             _filtSeqPosv.front());
+                _totFiltSeqLen += thisSize;
+                retVal = true;
+
+                // update or remove the _filtSeq data
+                if (_filtSeqv.front().size() == thisSize) {
+                        _filtSeqv.pop_front();
+                        _filtSeqPosv.pop_front();
+                } else {
+                        _filtSeqv.front() = _filtSeqv.front().substr(thisSize);
+                        _filtSeqPosv.front().incSeqPos(thisSize);
+                }
         }
 
-        return !block.empty();
+        return retVal;
+}
+
+bool FastaBatch::getNextFilteredLine(std::string& line, SeqPos& seqPos)
+{
+        // this function is thread-safe
+        lock_guard<mutex> lock(m);
+
+        // get more sequence data if necessary
+        while (_filtSeqv.empty()) {
+                string tmp; SeqPos tmpSeqPos;
+                if (!getNextLine(tmp, tmpSeqPos))
+                        return false;
+                filterLine(tmp, tmpSeqPos, _filtSeqv, _filtSeqPosv);
+        }
+
+        line = _filtSeqv.front();
+        seqPos = _filtSeqPosv.front();
+        _totFiltSeqLen += line.size();
+        _filtSeqv.pop_front();
+        _filtSeqPosv.pop_front();
+
+        return true;
 }
 
 bool FastaBatch::getNextOverlappingBlock(SeqBlock& block, size_t maxSize,
                                          size_t overlap)
 {
+        // maximum block size needs to be bigger than the overlap size
+        assert(maxSize > overlap);
+
+        // this function is thread-safe
         lock_guard<mutex> lock(m);
 
+        // first copy the overlap from the previous block
         block = _nextBlock;
 
-        bool retVal = getNextBlock(block, maxSize);
-        block.getSuffixBlock(_nextBlock, block.size() - overlap);
+        // reduce maxSize in order not to exceed the total maximum size
+        if (!appendNextBlock(block, maxSize))
+                return false;
 
-        return retVal;
+        // if the block is completely filled, copy the suffix to _nextBlock
+        if (block.size() == maxSize)
+                block.getSuffixBlock(_nextBlock, block.size() - overlap);
+
+        return true;
 }
 
 // ============================================================================
@@ -227,15 +309,15 @@ bool SeqMatrix::getNextSeqMatrix(FastaBatch& bf)
         size_t maxBlockSize = K * numCol + overlap;
 
         // get the next block
-        bf.getNextOverlappingBlock(block, maxBlockSize, overlap);
-
-        // compute the number of non-zero columns in the sequence matrix
-        numOccCol = (block.size() - overlap + K - 1) / K;
+        if(!bf.getNextOverlappingBlock(block, maxBlockSize, overlap))
+                return false;
 
         // fill the sequence matrix
         S.fill(0.0f);
-        for (size_t j = 0; j < numOccCol; j++) {
+        for (size_t j = 0; j < numCol; j++) {
                 for (size_t i = 0; i < (K + overlap); i++) {
+                        if ((j*K+i) >= block.size())
+                                return true;
                         if (block[j*K+i] == 'A')
                                 S(4*i+0, j) = 1;
                         if (block[j*K+i] == 'C')
@@ -244,49 +326,11 @@ bool SeqMatrix::getNextSeqMatrix(FastaBatch& bf)
                                 S(4*i+2, j) = 1;
                         if (block[j*K+i] == 'T')
                                 S(4*i+3, j) = 1;
+                        numOccCol = j + 1;
                 }
         }
 
-        return numOccCol > 0;
-}
-
-void SeqMatrix::extractOccurrences(const Matrix<float>& R, const vector<size_t>& row2motifID,
-                                   std::vector<MotifOccurrence>& motifOcc,
-                                   size_t offset, const MotifContainer& motifs)
-{
-        for (size_t j = 0; j < numOccCol; j++) {
-                for (size_t i = 0; i < R.nRows(); i++) {
-                        float thisScore = R(i,j);
-                        size_t motifID = row2motifID[i];
-
-                        if (thisScore < motifs.getThreshold(motifID))
-                                continue;
-
-                        // at this point an occurrence is found
-                        size_t seqID = block.getSeqIdx(j*K+offset);
-                        size_t seqPos = block.getSeqPos(j*K+offset);
-                        size_t remSeqLen = block.getRemainingSeqLen(j*K+offset);
-
-                        if (motifs[motifID].size() > remSeqLen)
-                                continue;
-
-                        motifOcc.push_back(MotifOccurrence(motifID, seqID, seqPos, thisScore));
-                }
-        }
-}
-
-void SeqMatrix::findOccurrences(const Matrix<float>& P,
-                                const vector<size_t>& row2motifID,
-                                vector<MotifOccurrence>& motifOcc,
-                                const MotifContainer& motifs)
-{
-        motifOcc.clear();
-
-        Matrix<float> R(P.nRows(), numOccCol);
-        for (int offset = 0; offset < K; offset++) {
-                R.gemm(P, S, 4*offset, numOccCol);
-                extractOccurrences(R, row2motifID, motifOcc, offset, motifs);
-        }
+        return true;
 }
 
 std::ostream& operator<< (std::ostream& os, const SeqMatrix& sm)

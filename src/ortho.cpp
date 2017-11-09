@@ -21,31 +21,83 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <cmath>
 
 #include "ortho.h"
 #include "phylotree.h"
+#include "species.h"
+#include "motif.h"
 
 using namespace std;
 
+void OrthoCount::print()
+{
+        cout << motifName << endl;
+        for (auto it : motifCounts)
+                cout << it << " ";
+        cout << "\n";
+        vector<float> median = getRandomMedian();
+        for (auto it : median)
+                cout << it << " ";
+        cout << "\n";
+        vector<float> C = computeCScores();
+        for (auto it : C)
+                cout << it << " ";
+        cout << "\n";
+}
+
+// ============================================================================
+// ORTHOCONTAINER
+// ============================================================================
+
+void OrthoContainer::load(const string& filename)
+{
+        // read the input file and create the orthoGroups
+        ifstream ifs(filename.c_str());
+        if (!ifs)
+                throw runtime_error("Could not open file: " + filename);
+
+        while (true) {
+                string refSpecies, refSeqName, orthoSpecies, orthoSeqName;
+                ifs >> refSpecies >> refSeqName >> orthoSpecies >> orthoSeqName;
+                if (!ifs)
+                        break;
+
+                orthoGroups[refSeqName].insert(refSpecies, refSeqName);
+                orthoGroups[refSeqName].insert(orthoSpecies, orthoSeqName);
+        }
+
+        // create a sequence 2 ortho index
+        for (auto it = orthoGroups.begin(); it != orthoGroups.end(); it++) {
+                const string& orthoName = it->first;
+                const OrthoGroup& og = it->second;
+                for (auto it2 = og.seqBegin(); it2 != og.seqEnd(); it2++)
+                        seq2ortho.insert(make_pair(*it2, orthoName));
+        }
+}
+
+// ============================================================================
+// ORTHO MODULE
+// ============================================================================
+
 std::ostream& operator<< (std::ostream& os, const OrthoGroup& og)
 {
-        for (auto it : og.genes)
+        for (auto it : og.sequences)
                 os << it << "\n";
         return os;
 }
 
 void Ortho::printUsage() const
 {
-        cout << "Usage: blstools ortho [options] occurrences.input sequences.idx motifs.idx orthogroups.input phylotree.newick\n\n";
+        cout << "Usage: blstools ortho [options] motifs.input sequences.input orthogroups.input phylotree.input occurrences.input\n\n";
 
         cout << " [options]\n";
-        cout << "  -h\t--help\t\tdisplay help message\n\n";
-        cout << "  -p\t--print\t\toutput tree to the screen\n\n";
+        cout << "  -h\t--help\t\tdisplay help message\n";
 
         cout << " [file_options]\n";
         cout << "  -o\t--output\tfilename for output BLS values [default = stdout]\n\n";
 
-        cout << " File \"tree.newick\" should contain the phylogenetic tree in Newick format, e.g.:\n";
+        cout << " File \"phylotree.input\" should contain the phylogenetic tree in Newick format, e.g.:\n";
         cout << "  \"(((A:1,B:1):1,(C:1,D:1):1):1,((E:1,F:1):1,(G:1,H:1):1):1);\"\n\n";
 
         cout << " File \"leafs.input\" should contain a list of space or tab separated\n";
@@ -57,25 +109,6 @@ void Ortho::printUsage() const
         cout << "Report bugs to Jan Fostier <jan.fostier@ugent.be>\n";
 }
 
-string gene2species(const string& gene)
-{
-        char c = gene[0];
-        if (c == 'B')
-                return "bdi";
-        if (c == 'H')
-                return "bdi";
-        if (c == 'M')
-                return "mac";
-        if (c == 'Z')
-                return "zma";
-        if (c == 'O')
-                return gene[2] == 'I' ? "osindica" : "osa";
-        if (c == 'S')
-                return gene[1] == 'B' ? "sbi" : "sit";
-        cerr << "Error converting gene to species" << endl;
-        return "ERROR";
-}
-
 Ortho::Ortho(int argc, char ** argv)
 {
         // check for sufficient arguments
@@ -85,85 +118,44 @@ Ortho::Ortho(int argc, char ** argv)
         }
 
         // process optional arguments
-       /* for (int i = 2; i < argc-2; i++) {
+        for (int i = 2; i < argc-5; i++) {
                 string arg(argv[i]);
 
                 if ((arg == "-h") || (arg == "--help")) {
                         printUsage();
                         exit(EXIT_SUCCESS);
-                } else if ((arg == "-p") || (arg == "--print")) {
-                        printTree = true;
-                } else if (((arg == "-o") || (arg == "--output")) && (i+1 < argc-2)) {
-                        outputFilename = string(argv[i+1]);
-                        i++;
                 } else {
                         printUsage();
                         exit(EXIT_FAILURE);
                 }
-        }*/
-
-        string occFilename = argv[argc-5];
-        string seqIdxFilename = argv[argc-4];
-        string motifIdxFilename = argv[argc-3];
-        string orthoFilename = argv[argc-2];
-        string phyloFilename = argv[argc-1];
-
-        // A) Read the ortho groups
-        ifstream ifs(orthoFilename.c_str());
-        if (!ifs)
-                throw runtime_error("Could not open file: " + orthoFilename);
-
-        while (ifs) {
-                string temp, orthoname, seqName, motifName;
-                ifs >> temp >> orthoname >> temp >> seqName;
-                if (!ifs)
-                        break;
-                orthoGroups[orthoname].insert(seqName);
-                seq2ortho.insert(pair<string, string>(seqName, orthoname));
         }
 
-        // also insert the zma gene into the ortho group
-        for (auto& it : orthoGroups) {
-                it.second.insert(it.first);
-                seq2ortho.insert(pair<string, string>(it.first, it.first));
-        }
+        string motifFilename = argv[argc-5];
+        string manifestFilename = argv[argc-4];
+        string orthoFilename = argv[argc-3];
+        string phyloFilename = argv[argc-2];
+        string occFilename = argv[argc-1];
 
-        ifs.close();
+        // A) Load the motifs
+        MotifContainer motifContainer(motifFilename, true);
+        cout << "Loaded " << motifContainer.size() << " motifs from disk\n";
 
-        // B) Read the index file
-        ifs.open(seqIdxFilename.c_str());
+        // B) Load the manifest file
+        string dictFilename = manifestFilename + ".dict";
+
+        SpeciesContainer speciesContainer;
+        speciesContainer.load(dictFilename);
+        cout << "Loaded dictionaire with " << speciesContainer.size() << " species\n";
+
+        // C) Read the ortho groups
+        OrthoContainer orthoContainer;
+        orthoContainer.load(orthoFilename);
+        cout << "Loaded " << orthoContainer.size() << " orthology groups\n";
+
+         // D) process the phylogenetic tree
+        ifstream ifs(phyloFilename.c_str());
         if (!ifs)
-                throw runtime_error("Could not open file: " + seqIdxFilename);
-
-        while (ifs) {
-                string seqName, temp;
-                ifs >> seqName >> temp >> temp >> temp;
-                if (!ifs)
-                        break;
-                seqIndex.push_back(seqName);
-        }
-
-        ifs.close();
-
-        // C) Read the motif index file
-        ifs.open(motifIdxFilename.c_str());
-        if (!ifs)
-                throw runtime_error("Could not open file: " + motifIdxFilename);
-
-        while (ifs) {
-                string motifName;
-                ifs >> motifName;
-                if (!ifs)
-                        break;
-                motifIndex.push_back(motifName);
-        }
-
-        ifs.close();
-
-        // process the input tree
-        ifs.open(phyloFilename.c_str());
-        if (!ifs)
-                throw runtime_error("Could not open file: " + string(argv[argc-2]));
+                throw runtime_error("Could not open file: " + phyloFilename);
         string newickStr;
         getline(ifs, newickStr);
         ifs.close();
@@ -171,80 +163,140 @@ Ortho::Ortho(int argc, char ** argv)
         PhylogeneticTree pt(newickStr);
         pt.normalizeBranchLength();
 
-        // C) Read the occurrence file
+        // check whether the species in the phylotree match with the ones in the manifest file
+        set<string> speciesNames = pt.getAllNames();
+        for (auto it : speciesContainer)
+                if (speciesNames.find(it.getName()) == speciesNames.end())
+                        throw runtime_error("ERROR: Species name \"" + it.getName() + "\" does not occur in " + phyloFilename);
+
+        cout << "Loaded phylogenetic tree" << endl;
+
+        // E) Read the occurrence file
         ofstream ofs("BLS.txt");
+        ofstream ofsCounts("motifCounts.txt");
 
         ifs.open(occFilename.c_str());
         if (!ifs)
                 throw runtime_error("Could not open file: " + occFilename);
 
-        int motifID, nextMotifID, seqID;
+        size_t motifID, speciesID, nextMotifID, seqID;
         map<string, set<string> > orthoSpecComb;
         map<string, set<string> > orthoGeneComb;
 
         ifs >> motifID;
+        size_t numBLSIntv = 10;
+
         while (ifs) {
                 string temp;
-                ifs >> seqID >> temp >> temp;
+                // motifID speciesID seqID seqPos strand score
+                ifs >> speciesID >> seqID >> temp >> temp >> temp;
                 ifs >> nextMotifID;
 
-                string seq = seqIndex[seqID];
-                auto range = seq2ortho.equal_range(seq);
+                if (speciesID > speciesContainer.size())
+                        throw runtime_error("ERROR: File " + occFilename + " contains a speciesID not present in file " + manifestFilename);
 
+                if (motifID > motifContainer.size())
+                        throw runtime_error("ERROR: File " + occFilename + " contains a motifID not present in file " + motifFilename);
+
+                if (nextMotifID < motifID)
+                        throw runtime_error("ERROR: File " + occFilename + " is not sorted. Sort this file prior to running the ortho module");
+
+                string species = speciesContainer.getSpecies(speciesID).getName();
+                string seq = speciesContainer.getSpecies(speciesID).getSeqName(seqID);
+
+                // for all ortho groups that contain sequence "seq"
+                auto range = orthoContainer.equal_range(seq);
                 for (auto it = range.first; it != range.second; it++) {
-                        orthoSpecComb[it->second].insert(gene2species(seq));
+                        orthoSpecComb[it->second].insert(species);
                         orthoGeneComb[it->second].insert(seq);
                 }
 
-                if ((motifID != nextMotifID) || (!ifs)) {
-                        array<size_t, 10> counts = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-                        for (auto it : orthoSpecComb) {
-                                float BLS = pt.getBLS(it.second);
+                // we have more hits from the same motif: continue
+                if ((ifs) && (nextMotifID == motifID))
+                        continue;
 
-                                ofs << motifID << "\t" << motifIndex[motifID] << "\t" << it.first << "\t" << BLS;
+                vector<size_t> counts(numBLSIntv, 0);
+                for (auto it : orthoSpecComb) {
+                        const OrthoGroup& og = orthoContainer.getOrthoGroup(it.first);
 
-                                for (auto gene : orthoGeneComb[it.first])
-                                        ofs << "\t" << gene;
-                                ofs << endl;
+                        float BLS = pt.getBLS(it.second);
+                        // float maxBLS = pt.getBLS(og.getSpecies());
+                        //if (maxBLS > 0)
+                         //       BLS /= maxBLS;
 
-                                int end = 0;
-                                if (BLS >= 0.00)
-                                        end = 1;
-                                if (BLS >= 0.10)
-                                        end = 2;
-                                if (BLS >= 0.20)
-                                        end = 3;
-                                if (BLS >= 0.30)
-                                        end = 4;
-                                if (BLS >= 0.40)
-                                        end = 5;
-                                if (BLS >= 0.50)
-                                        end = 6;
-                                if (BLS >= 0.60)
-                                        end = 7;
-                                if (BLS >= 0.70)
-                                        end = 8;
-                                if (BLS >= 0.80)
-                                        end = 9;
-                                if (BLS >= 0.90)
-                                        end = 10;
+                        ofs << motifID << "\t" << motifContainer[motifID].getName() << "\t" << it.first << "\t" << BLS;
 
-                                for (size_t i = 0; i < end; i++)
-                                        counts[i]++;
-                        }
+                        for (auto gene : orthoGeneComb[it.first])
+                                ofs << "\t" << gene;
+                        ofs << endl;
 
-                        cout << motifID << "\t" << motifIndex[motifID];
-                        for (int i = 0; i < 10; i++)
-                                cout << "\t" << counts[i];
-                        cout << "\n";
+                        float intWidth = 1.0 / numBLSIntv;
+                        int end = floor(BLS / intWidth) + 1;
+                        if (end > numBLSIntv)
+                                end = numBLSIntv;
 
-                        orthoSpecComb.clear();
-                        orthoGeneComb.clear();
+                        for (size_t i = 0; i < end; i++)
+                                counts[i]++;
                 }
+
+                cout << motifID << "\t" << motifContainer[motifID].getName();
+                ofsCounts << motifID << "\t" << motifContainer[motifID].getName();
+                for (int i = 0; i < numBLSIntv; i++) {
+                        cout << "\t" << counts[i];
+                        ofsCounts << "\t" << counts[i];
+                }
+                cout << "\n";
+                ofsCounts << "\n";
+
+                orthoSpecComb.clear();
+                orthoGeneComb.clear();
 
                 motifID = nextMotifID;
         }
 
         ifs.close();
+        ofs.close();
+        ofsCounts.close();
+
+        ofs.open("motifCScores.txt");
+        ifs.open("motifCounts.txt");
+        if (!ifs)
+                throw runtime_error("Could not open file: counts.txt");
+
+        OrthoCount orthoCount("");
+        while (ifs) {
+                size_t motifID;
+                vector<size_t> counts(numBLSIntv, 0);
+                string motifName;
+
+                ifs >> motifID >> motifName;
+                for (size_t i = 0; i < numBLSIntv; i++)
+                        ifs >> counts[i];
+
+                // if we encounter a new motif
+                if (!motifContainer[motifID].isPermutation()) {
+                        if (orthoCount.size() > 0) {
+                                ofs << motifName;
+                                vector<float> C = orthoCount.computeCScores();
+                                for (auto it : C)
+                                        ofs << "\t" << it;
+                                ofs << "\n";
+                        }
+
+                        orthoCount = OrthoCount(motifContainer[motifID].getName());
+                        orthoCount.setMotifCounts(counts);
+                } else {        // it's a random motif
+                        orthoCount.addRandomCounts(counts);
+                }
+        }
+
+        if (orthoCount.size() > 0) {
+                ofs << orthoCount.getName();
+                vector<float> C = orthoCount.computeCScores();
+                for (auto it : C)
+                        ofs << "\t" << it;
+                ofs << "\n";
+        }
+
         ofs.close();
 }

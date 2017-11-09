@@ -107,6 +107,12 @@ public:
         float getBLS(const std::set<std::string>& names);
 
         /**
+         * Get all branch names in the tree
+         * @return Set of branch names
+         */
+        std::set<std::string> getAllNames();
+
+        /**
          * operator<< overloading
          * @param os Output stream
          * @param pt PhylogeneticTree

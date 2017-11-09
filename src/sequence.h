@@ -23,7 +23,10 @@
 
 #include <string>
 #include <vector>
+#include <deque>
+#include <climits>
 #include <map>
+#include <set>
 #include <fstream>
 #include <mutex>
 
@@ -75,6 +78,14 @@ public:
         size_t getSeqPos() const {
                 return seqPos;
         }
+
+        /**
+         * Increment the sequence position by an offset
+         * @param offset Offset
+         */
+        void incSeqPos(size_t offset = 1) {
+                seqPos += offset;
+        }
 };
 
 // ============================================================================
@@ -84,6 +95,14 @@ public:
 class SeqBlock {
 
 private:
+        /**
+         * Check whether a SeqPos marker is contiguous with the final sequence
+         * in the SeqBlock (= same contigous sequence)
+         * @param sp SeqPos marker
+         * @return true or false
+         */
+        bool isContiguous(const SeqPos& sp) const;
+
         std::string block;              // block of one or more sequences
         std::map<size_t, SeqPos> block2seq;     // block to sequence map
 
@@ -93,48 +112,21 @@ public:
          * @param blockPos Block position
          * @return The sequence position
          */
-        size_t getSeqPos(size_t blockPos) const {
-                auto it = block2seq.upper_bound(blockPos);
-                assert(it != block2seq.begin());
-                --it;
-                return it->second.getSeqPos() + blockPos - it->first;
-        }
+        SeqPos getSeqPos(size_t blockPos) const;
 
         /**
          * Given a block position, get the remaining length within the sequence
          * @param blockPos Block position
          * @return The remaining length within this sequence
          */
-        size_t getRemainingSeqLen(size_t blockPos) const {
-                auto it = block2seq.upper_bound(blockPos);
-                assert(it != block2seq.begin());
-                size_t nextBlockPos = (it == block2seq.end()) ? block.size() : it->first;
-                return nextBlockPos - blockPos;
-        }
-
-        /**
-         * Given a block position, get the corresponding sequence index
-         * @param blockPos Block position
-         * @return The sequence index
-         */
-        size_t getSeqIdx(size_t blockPos) const {
-                auto it = block2seq.upper_bound(blockPos);
-                assert(it != block2seq.begin());
-                --it;
-                return it->second.getSeqIndex();
-        }
+        size_t getRemainingSeqLen(size_t blockPos) const;
 
         /**
          * Append a new sequence to the block
          * @param data Sequence content
          * @param sp Sequence position
          */
-        void append(const std::string& data, const SeqPos& sp) {
-                if ((block2seq.empty()) ||
-                    (block2seq.rbegin()->second.getSeqIndex() != sp.getSeqIndex()))
-                        block2seq[block.size()] = sp;
-                block.append(data);
-        }
+        void append(const std::string& data, const SeqPos& sp);
 
         /**
          * Clear the sequence block
@@ -178,7 +170,7 @@ public:
         /**
          * operator<< overloading
          * @param os Output stream
-         * @param pt PhylogeneticTree
+         * @param sb Sequence block
          */
         friend std::ostream& operator<< (std::ostream& os, const SeqBlock& sb);
 };
@@ -200,92 +192,67 @@ private:
         std::ifstream _ifs;                     // current input file stream
         size_t _currFileIdx;                    // current file index
 
-        /**
-         * Get the next line of sequence content
-         * @param line String where the line is stored
-         * @param seqIdx Sequence index from which line is retreived
-         * @param seqPos Position of the line in the current sequence
-         * @return False if no more lines are left, true otherwise
-         */
-        bool getNextLine(std::string& line, size_t& seqIdx, size_t& seqPos);
-
         // following variables are modified as side effect of getNextLine()
         std::vector<std::string> _seqNames;     // sequence names
         size_t _currSeqLen;                     // current sequence length
         size_t _totSeqLen;                      // total sequence length
 
         /**
-         * Get a raw block of (appended) sequence data
+         * Get the next line of sequence content
+         * @param line String where the line is stored
+         * @param seqPos SeqPos structure
+         * @return False if no more lines are left, true otherwise
+         */
+        bool getNextLine(std::string& line, SeqPos& seqPos);
+
+        /**
+         * Filter (and break) a line in valid ACTG sequences
+         * @param line String with the input sequence content (unfiltered)
+         * @param seqPos SeqPos structure
+         * @param filtLine Filtered sequence lines (output)
+         * @param filtSeqPos Filtered sequence positions (output)
+         */
+        void filterLine(const std::string& line, const SeqPos& seqPos,
+                        std::deque<std::string>& filtLine,
+                        std::deque<SeqPos>& filtSeqPos) const;
+
+        /**
+         * Append a sequence block with additional (raw) data
          * @param block Block of bulk sequence data
          * @param maxSize Maximum size of the block
-         * @return True if the block is non-empty
+         * @return True if at least one character was appended
          */
-        bool getNextBlock(SeqBlock& block, size_t maxSize);
+        bool appendNextBlock(SeqBlock& block, size_t maxSize);
 
-        // following variables are modified as side effect of getNextBlock()
-        std::string _actSeq;                    // active sequence
-        size_t _actSeqIdx;                      // active sequence index
-        size_t _actSeqPos;                      // active sequence position
-        size_t _actPos;                         // position within active sequence
+        // following variables are modified as side effect of appendNextBlock()
+        std::deque<std::string> _filtSeqv;
+        std::deque<SeqPos> _filtSeqPosv;
+        size_t _totFiltSeqLen;          // total filted sequence length
+        size_t _maxFiltSeqLen;          // maximum filtered sequence length
 
         // following variables are modified as side effect of getNextOverlappingBlock()
         SeqBlock _nextBlock;
-
-        int char2Idx[256];
-        std::vector<std::string> seqFiles;
-        std::array<float, 5> nucleotideFreq;    // nucleotide frequency
-
         std::mutex m;
+
+        std::vector<std::string> seqFiles;      // sequence files in fasta batch
 
 public:
         /**
          * Default constructor
+         * @param seqFiles List of fasta files to read from
+         * @param maxFiltSeqLen Maximum filtered sequence length
          */
-        FastaBatch() : _currFileIdx(0), _currSeqLen(0), _totSeqLen(0),
-                       _actSeqIdx(0), _actSeqPos(0), _actPos(0) {}
+        FastaBatch(const std::vector<std::string>& seqFiles,
+                   size_t maxFiltSeqLen = std::numeric_limits<size_t>::max()) :
+                   _currFileIdx(0), _currSeqLen(0), _totSeqLen(0),
+                   _totFiltSeqLen(0), _maxFiltSeqLen(maxFiltSeqLen),
+                   seqFiles(seqFiles) {}
 
         /**
-         * Calculate the background frequencies
+         * Get the sequence names
          */
-        void calcBGFrequencies();
-
-        /**
-         * Write the sequence names
-         * @param filename File name of the output file
-         */
-        void writeSeqNames(const std::string& filename);
-
-        /**
-         * Add a single sequence file to process
-         * @param filename File name
-         */
-        void addFile(const std::string& filename);
-
-        /**
-         * Add a list of sequence files to process
-         * @param listname File name of the list
-         */
-        void addList(const std::string& listname);
-
-        /**
-         * Reset the fasta batch handler
-         */
-        void reset() {
-                _currFileIdx = _currSeqLen = _totSeqLen = 0;
-                _actSeqIdx = _actSeqPos = _actPos = 0;
-                if (_ifs.is_open())
-                        _ifs.close();
-                _seqNames.clear();
-                _actSeq.clear();
-                _nextBlock.clear();
-        }
-
-        /**
-         * Get the background nucleotide frequencies
-         * @return The background nucleotide frequencies
-         */
-        std::array<float, 5> getNucleotideFreq() const {
-                return nucleotideFreq;
+        const std::vector<std::string>& getSeqNames() const {
+                return _seqNames;
         }
 
         /**
@@ -322,13 +289,22 @@ public:
         }
 
         /**
-         * Get a raw block of (appended) sequence data
-         * @param block Block of bulk sequence data
+         * Get a filtered line of sequence data
+         * @param line Line of sequence data
+         * @param seqPos Sequence position
+         * @return True if the line is non-empty
+         */
+        bool getNextFilteredLine(std::string& line, SeqPos& seqPos);
+
+        /**
+         * Get a filtered sequence data and append to block
+         * @param block Block of bulk sequence data (input/output)
          * @param maxSize Maximum size of the block
          * @param overlap Overlap with the previous block
          * @return True if the block is non-empty
          */
-        bool getNextOverlappingBlock(SeqBlock& block, size_t maxSize, size_t overlap);
+        bool getNextOverlappingBlock(SeqBlock& block, size_t maxSize,
+                                     size_t overlap);
 };
 
 // ============================================================================
@@ -338,6 +314,7 @@ public:
 class SeqMatrix {
 
 private:
+        // matrix dimensions = 4(K + overlap) x numCol
         size_t K;                       // number of sequence rows
         size_t overlap;                 // number of overlap rows
         size_t numCol;                  // number of columns
@@ -346,29 +323,16 @@ private:
         Matrix<float> S;                // actual matrix
         SeqBlock block;                 // sequence block
 
-        /**
-         * Given a result matrix, extract the motif occurrences
-         * @param R Resulting matrix
-         * @param row2motifID Conversion between a row of R and a motif ID
-         * @param motifOcc Vector to store the output motif occurrences (output)
-         * @param motifs Motif container that holds the motifs
-         */
-        void extractOccurrences(const Matrix<float>& R,
-                                const std::vector<size_t>& row2motifID,
-                                std::vector<MotifOccurrence>& motifOcc,
-                                size_t offset, const MotifContainer& motifs);
-
 public:
         /**
          * Default constructor
-         * @param K_ Number of sequence rows
-         * @param overlap_ Number of overlap rows
-         * @param numCol_ Number of sequence columns
+         * @param K Number of sequence rows
+         * @param overlap Number of overlap rows
+         * @param numCol Number of sequence columns
          */
-        SeqMatrix(size_t K_, size_t overlap_, size_t numCol_) :
-                K(K_), overlap(overlap_), numCol(numCol_), numOccCol(0) {
-                        S = Matrix<float>(4*(K+overlap), numCol);
-                }
+        SeqMatrix(size_t K, size_t overlap, size_t numCol) :
+                K(K), overlap(overlap), numCol(numCol), numOccCol(0),
+                S(4*(K+overlap), numCol) {}
 
         /**
          * Fill the next sequence matrix
@@ -378,16 +342,44 @@ public:
         bool getNextSeqMatrix(FastaBatch& bf);
 
         /**
-         * Given a pattern matrix, extract the motif occurrences
-         * @param P Pattern matrix (motif matrix)
-         * @param row2motifID Conversion between a row of P and a motif ID
-         * @param motifOcc Vector to store the output motif occurrences (output)
-         * @param motifs Motif container that holds the motifs
+         * Given a matrix position (row, col), get the remaining sequence length
+         * @param row row index
+         * @param col column index
+         * @return The remaining length within this sequence
          */
-        void findOccurrences(const Matrix<float>& P,
-                             const std::vector<size_t>& row2motifID,
-                             std::vector<MotifOccurrence>& motifOcc,
-                             const MotifContainer& motifs);
+        size_t getRemainingSeqLen(size_t row, size_t col) const {
+                size_t blockPos = K*col + row;
+                if (blockPos >= block.size())
+                        return 0;
+                return block.getRemainingSeqLen(blockPos);
+        }
+
+        /**
+         * Given a matrix position (row, col), get the corresponding sequence position
+         * @param row row index
+         * @param col column index
+         * @return The sequence position at (row, col)
+         */
+        SeqPos getSeqPos(size_t row, size_t col) const {
+                return block.getSeqPos(K*col + row);
+        }
+
+        /**
+         * Get the number of occupied columns in the matrix
+         * @return The number of occupied columns
+         */
+        size_t getNumOccCol() const {
+                return numOccCol;
+        }
+
+        /**
+         * Get the submatrix of S(4*index:4*(index+overlap+1); 0:numOccCol)
+         * @param index start index [0..K-1]
+         * @return A submatrix
+         */
+        const SubMatrix<float> getSubMatrix(size_t index) const {
+                return SubMatrix<float>(S, 4*index, 4*(overlap + 1), 0, numOccCol);
+        }
 
         /**
          * operator<< overloading

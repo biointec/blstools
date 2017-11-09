@@ -18,13 +18,28 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#ifndef BLSTOOLS_H
-#define BLSTOOLS_H
+#ifndef DICT_H
+#define DICT_H
 
 // ============================================================================
-// COMMAND CLASS (ENUM)
+// DICTIONARY
 // ============================================================================
 
-enum class Command { none, dict, hist, bls, scan, ortho };
+class Dictionary
+{
+private:
+        /**
+         * Print module instructions
+         */
+        void printUsage() const;
+
+public:
+        /**
+         * Constructor (run dictionary module)
+         * @param argc Command line argument count
+         * @param argv Command line argument values
+         */
+        Dictionary(int argc, char **argv);
+};
 
 #endif

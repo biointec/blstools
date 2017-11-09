@@ -36,7 +36,8 @@ class PWMScan
 {
 private:
         std::string outputFilename;
-        bool listProvided;
+
+        bool simpleMode;
 
         bool absThSpecified;
         float absThreshold;
@@ -44,9 +45,16 @@ private:
         bool relThSpecified;
         float relThreshold;
 
+        bool pvalueSpecified;
+        float pvalue;
+
+        std::string histdir;    // histogram directory
+
         size_t numThreads;
 
         bool revCompl;
+
+        size_t pseudocounts;
 
 
         size_t m;               // number of motifs
@@ -64,12 +72,55 @@ private:
         void printUsage() const;
 
         /**
-         * Thread function that does the actual scanning
-         *
+         * Given a result matrix, extract the PWM occurrences
+         * @param R Result matrix R
+         * @param offset Offset used to generate R = P * sub(S)
+         * @param sm Sequence matrix
+         * @param motifContainer Motif container
+         * @param motifOcc Vector containing all motif occurrences
          */
-        void scanThread(size_t myID, const MotifContainer& motifs,
-                        const Matrix<float>& P, const std::vector<size_t>& row2motifID,
-                        FastaBatch& fb, std::ostream& os);
+        void extractOccurrences(const Matrix<float>& R, size_t offset,
+                                SeqMatrix& sm,
+                                const MotifContainer& motifContainer,
+                                std::vector<MotifOccurrence>& motifOcc);
+
+        /**
+         * Thread function that does the actual scanning
+         * @param speciesID Species identifier
+         * @param motifContainer Motif MotifContainer
+         * @param seqBatch Fasta sequence batch
+         * @param os Output stream to write hits to
+         */
+        void scanThread(size_t speciesID, const MotifContainer& motifContainer,
+                        FastaBatch& seqBatch, std::ostream& os);
+
+        /**
+         * Thread function that does the actual scanning (simple algorithm)
+         * @param speciesID Species identifier
+         * @param motifContainer Motif MotifContainer
+         * @param seqBatch Fasta sequence batch
+         * @param os Output stream to write hits to
+         */
+        void scanThreadSimple(size_t speciesID, const MotifContainer& motifContainer,
+                              FastaBatch& seqBatch, std::ostream& os);
+
+        /**
+         * Scan sequences for PWM occurrences
+         * @param motifContainer Motif MotifContainer
+         * @param seqBatch Fasta sequence batch
+         * @param os Output stream to write hits to
+         */
+        void scanPWM(size_t speciesID, const MotifContainer& motifContainer,
+                     FastaBatch& seqBatch, std::ostream& os);
+
+        /**
+         * Scan sequences for PWM occurrences
+         * @param motifContainer Motif MotifContainer
+         * @param seqBatch Fasta sequence batch
+         * @param os Output stream to write hits to
+         */
+        void scanPWMSimple(size_t speciesID, const MotifContainer& motifContainer,
+                           FastaBatch& seqBatch, std::ostream& os);
 
 public:
         /**
@@ -78,11 +129,6 @@ public:
          * @param argv Command line argument values
          */
         PWMScan(int argc, char **argv);
-
-        void loadFasta(const std::string& filename, std::string& sequence);
-
-        void countFrequencies(const std::string& sequence,
-                              std::array<float, 5>& frequencies);
 };
 
 #endif

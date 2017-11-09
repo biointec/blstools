@@ -21,10 +21,12 @@
 #include <string>
 #include <iostream>
 
+#include "dict.h"
 #include "blstools.h"
 #include "bls.h"
 #include "pwmscan.h"
 #include "ortho.h"
+#include "hist.h"
 
 using namespace std;
 
@@ -44,8 +46,10 @@ void printUsage()
         cout << "Usage: blstools command [options]\n\n";
 
         cout << " command\n";
+        cout << "  dict\t\t\tmake a dictionary for the input sequences\n";
+        cout << "  hist\t\t\tgenerate PWM score histograms\n";
         cout << "  scan\t\t\tscan for pwm occurrences\n";
-        cout << "  bls\t\t\tcompute the branch length score\n\n";
+        cout << "  bls\t\t\tcompute the branch length score\n";
         cout << "  ortho\t\t\tconvert ortho groups\n\n";
 
         cout << " [options]\n";
@@ -53,6 +57,26 @@ void printUsage()
         cout << "  -v\t--version\tdisplay version\n\n";
 
         cout << "Report bugs to Jan Fostier <jan.fostier@ugent.be>\n";
+}
+
+void runDictModule(int argc, char **argv)
+{
+        try {
+                Dictionary dict(argc, argv);
+        } catch (runtime_error e) {
+                cerr << e.what() << endl;
+                exit(EXIT_FAILURE);
+        }
+}
+
+void runHistModule(int argc, char **argv)
+{
+        try {
+                Histogram hist(argc, argv);
+        } catch (runtime_error e) {
+                cerr << e.what() << endl;
+                exit(EXIT_FAILURE);
+        }
 }
 
 void runBLSModule(int argc, char **argv)
@@ -99,6 +123,10 @@ int main(int argc, char **argv)
                 } else if ((arg == "-v") || (arg == "--version")) {
                         printProgramVersion();
                         exit(EXIT_SUCCESS);
+                } else if (arg == "dict") {
+                        command = Command::dict;
+                } else if (arg == "hist") {
+                        command = Command::hist;
                 } else if (arg == "bls") {
                         command = Command::bls;
                 } else if (arg == "scan") {
@@ -114,6 +142,12 @@ int main(int argc, char **argv)
                         printUsage();
                         exit(EXIT_FAILURE);
                         break;
+                case Command::dict:
+                        runDictModule(argc, argv);
+                        break;
+                case Command::hist:
+                        runHistModule(argc, argv);
+                        break;
                 case Command::bls:
                         runBLSModule(argc, argv);
                         break;
@@ -124,6 +158,8 @@ int main(int argc, char **argv)
                         runOrthoModule(argc, argv);
                         break;
         }
+
+        cout << "Exiting... bye!" << endl;
 
         return EXIT_SUCCESS;
 }
