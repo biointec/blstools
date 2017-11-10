@@ -197,63 +197,71 @@ Ortho::Ortho(int argc, char ** argv)
         cout << "Loaded phylogenetic tree" << endl;
 
         // E) Read the occurrence file
-        ofstream ofs("BLS.txt");
+        ofstream ofsBLS("motifBLS.txt");
         ofstream ofsCounts("motifCounts.txt");
 
         ifs.open(occFilename.c_str());
         if (!ifs)
                 throw runtime_error("Could not open file: " + occFilename);
 
-        size_t motifID, speciesID, nextMotifID, seqID;
-        map<string, set<string> > orthoSpecComb;
-        map<string, set<string> > orthoGeneComb;
-
-        ifs >> motifID;
         size_t numBLSIntv = 10;
 
-        while (ifs) {
-                string temp;
-                // motifID speciesID seqID seqPos strand score
-                ifs >> speciesID >> seqID >> temp >> temp >> temp;
-                ifs >> nextMotifID;
+        for (size_t i = 0; i < motifContainer.size(); i++) {
+                map<string, set<string> > orthoSpecComb;
+                map<string, set<string> > orthoGeneComb;
 
-                if (speciesID > speciesContainer.size())
-                        throw runtime_error("ERROR: File " + occFilename + " contains a speciesID not present in file " + manifestFilename);
+                while (ifs) {
+                        // read a single line of the occurrence file
+                        string temp;
+                        size_t motifID, speciesID, seqID;
+                        int currFP = ifs.tellg();
+                        ifs >> motifID >> speciesID >> seqID >> temp >> temp >> temp;
 
-                if (motifID > motifContainer.size())
-                        throw runtime_error("ERROR: File " + occFilename + " contains a motifID not present in file " + motifFilename);
+                        if (!ifs)
+                                break;          // eof reached
 
-                if (nextMotifID < motifID)
-                        throw runtime_error("ERROR: File " + occFilename + " is not sorted. Sort this file prior to running the ortho module");
+                        if (speciesID > speciesContainer.size())
+                                throw runtime_error("ERROR: File " + occFilename + " contains a speciesID not present in file " + manifestFilename);
 
-                string species = speciesContainer.getSpecies(speciesID).getName();
-                string seq = speciesContainer.getSpecies(speciesID).getSeqName(seqID);
+                        if (motifID > motifContainer.size())
+                                throw runtime_error("ERROR: File " + occFilename + " contains a motifID not present in file " + motifFilename);
 
-                // for all ortho groups that contain sequence "seq"
-                auto range = orthoContainer.equal_range(seq);
-                for (auto it = range.first; it != range.second; it++) {
-                        orthoSpecComb[it->second].insert(species);
-                        orthoGeneComb[it->second].insert(seq);
+                        if (motifID < i)
+                                throw runtime_error("ERROR: File " + occFilename + " is not sorted. Sort this file prior to running the ortho module");
+
+                        // if the line deals with another motif, rewind
+                        if (motifID != i) {
+                                ifs.seekg(currFP, ios_base::beg);
+                                break;
+                        }
+
+                        // it deals with the current motif, so score it
+                        string species = speciesContainer.getSpecies(speciesID).getName();
+                        string seq = speciesContainer.getSpecies(speciesID).getSeqName(seqID);
+
+                        // for all ortho groups that contain sequence "seq"
+                        auto range = orthoContainer.equal_range(seq);
+                        for (auto it = range.first; it != range.second; it++) {
+                                orthoSpecComb[it->second].insert(species);
+                                orthoGeneComb[it->second].insert(seq);
+                        }
                 }
 
-                // we have more hits from the same motif: continue
-                if ((ifs) && (nextMotifID == motifID))
-                        continue;
-
+                // count the number of conserved instances for each BLS threshold
                 vector<size_t> counts(numBLSIntv, 0);
                 for (auto it : orthoSpecComb) {
-                        const OrthoGroup& og = orthoContainer.getOrthoGroup(it.first);
-
                         float BLS = pt.getBLS(it.second);
-                        // float maxBLS = pt.getBLS(og.getSpecies());
-                        //if (maxBLS > 0)
-                         //       BLS /= maxBLS;
 
-                        ofs << motifID << "\t" << motifContainer[motifID].getName() << "\t" << it.first << "\t" << BLS;
+                        // const OrthoGroup& og = orthoContainer.getOrthoGroup(it.first);
+                        // float maxBLS = pt.getBLS(og.getSpecies());
+                        // if (maxBLS > 0)
+                        //       BLS /= maxBLS;
+
+                        ofsBLS << i << "\t" << motifContainer[i].getName() << "\t" << it.first << "\t" << BLS;
 
                         for (auto gene : orthoGeneComb[it.first])
-                                ofs << "\t" << gene;
-                        ofs << endl;
+                                ofsBLS << "\t" << gene;
+                        ofsBLS << endl;
 
                         float intWidth = 1.0 / numBLSIntv;
                         int end = floor(BLS / intWidth) + 1;
@@ -264,26 +272,21 @@ Ortho::Ortho(int argc, char ** argv)
                                 counts[i]++;
                 }
 
-                cout << motifID << "\t" << motifContainer[motifID].getName();
-                ofsCounts << motifID << "\t" << motifContainer[motifID].getName();
-                for (int i = 0; i < numBLSIntv; i++) {
-                        cout << "\t" << counts[i];
-                        ofsCounts << "\t" << counts[i];
+                cout << i << "\t" << motifContainer[i].getName();
+                ofsCounts << i << "\t" << motifContainer[i].getName();
+                for (int j = 0; j < numBLSIntv; j++) {
+                        cout << "\t" << counts[j];
+                        ofsCounts << "\t" << counts[j];
                 }
                 cout << "\n";
                 ofsCounts << "\n";
-
-                orthoSpecComb.clear();
-                orthoGeneComb.clear();
-
-                motifID = nextMotifID;
         }
 
         ifs.close();
-        ofs.close();
+        ofsBLS.close();
         ofsCounts.close();
 
-        ofs.open("motifCScores.txt");
+        ofstream ofsCScores("motifCScores.txt");
         ifs.open("motifCounts.txt");
         if (!ifs)
                 throw runtime_error("Could not open file: counts.txt");
@@ -301,11 +304,11 @@ Ortho::Ortho(int argc, char ** argv)
                 // if we encounter a new motif
                 if ((!ifs) || (!motifContainer[motifID].isPermutation())) {
                         if (orthoCount.size() > 0) {
-                                ofs << orthoCount.getName();
+                                ofsCScores << orthoCount.getName();
                                 vector<float> C = orthoCount.computeCScores();
                                 for (auto it : C)
-                                        ofs << "\t" << it;
-                                ofs << "\n";
+                                        ofsCScores << "\t" << it;
+                                ofsCScores << "\n";
                         }
 
                         orthoCount = OrthoCount(motifContainer[motifID].getName());
@@ -315,5 +318,5 @@ Ortho::Ortho(int argc, char ** argv)
                 }
         }
 
-        ofs.close();
+        ofsCScores.close();
 }
