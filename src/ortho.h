@@ -100,8 +100,9 @@ public:
                 std::vector<float> CScores;
                 std::vector<float> medianCounts = getRandomMedian();
 
-                for (size_t i = 0; i < motifCounts.size(); i++)
-                        CScores.push_back(1.0 - medianCounts[i]/motifCounts[i]);
+                for (size_t i = 0; i < motifCounts.size(); i++) {
+                        CScores.push_back(std::max<size_t>(0, 1.0 - medianCounts[i]/motifCounts[i]));
+                }
 
                 return CScores;
         }
