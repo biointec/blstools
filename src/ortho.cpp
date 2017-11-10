@@ -299,9 +299,9 @@ Ortho::Ortho(int argc, char ** argv)
                         ifs >> counts[i];
 
                 // if we encounter a new motif
-                if (!motifContainer[motifID].isPermutation()) {
+                if ((!ifs) || (!motifContainer[motifID].isPermutation())) {
                         if (orthoCount.size() > 0) {
-                                ofs << motifName;
+                                ofs << orthoCount.getName();
                                 vector<float> C = orthoCount.computeCScores();
                                 for (auto it : C)
                                         ofs << "\t" << it;
@@ -313,14 +313,6 @@ Ortho::Ortho(int argc, char ** argv)
                 } else {        // it's a random motif
                         orthoCount.addRandomCounts(counts);
                 }
-        }
-
-        if (orthoCount.size() > 0) {
-                ofs << orthoCount.getName();
-                vector<float> C = orthoCount.computeCScores();
-                for (auto it : C)
-                        ofs << "\t" << it;
-                ofs << "\n";
         }
 
         ofs.close();
