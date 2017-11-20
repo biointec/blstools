@@ -241,6 +241,18 @@ void Motif::revCompl()
         revComp = !revComp;
 }
 
+void Motif::writeMOODSFile(const std::string& filename) const
+{
+        ofstream ofs(filename.c_str());
+
+        for (size_t i = 0; i < 4; i++) {
+                ofs << PFM[0][i];
+                for (size_t j = 1; j < PFM.size(); j++)
+                        ofs << "\t" << PFM[j][i];
+                ofs << "\n";
+        }
+}
+
 ostream& operator<< (ostream& os, const Motif& m)
 {
         os << m.name << "\n";
@@ -255,34 +267,88 @@ ostream& operator<< (ostream& os, const Motif& m)
 
 MotifContainer::MotifContainer(const std::string& filename, bool loadPermutations)
 {
-        ifstream ifs(filename.c_str());
-        if (!ifs)
-                throw runtime_error("Could not open file: " + filename);
+        vector<Motif> allMotifs;
 
-        vector<Motif> allMotifs; size_t motifID = 0;
-        while (ifs.good()) {
-                string temp;
-                getline(ifs, temp);
-                if (temp.empty())
-                        continue;
-                if (temp.front() == '>') {      // add a new motif
-                        allMotifs.push_back(Motif(temp.substr(1), motifID++));
-                        continue;
-                }
-                istringstream iss(temp);
-                size_t A, C, G, T;
-                iss >> A >> C >> G >> T;
-
-                allMotifs.back().addCharacter({A, C, G, T});
-        }
+        if ((filename.size() > 7) && (filename.substr(filename.size() - 7) == ".jaspar"))
+                loadJasparMotifs(filename, allMotifs);
+        else
+                loadCBMotifs(filename, allMotifs);
 
         // copy the temporary allmotifs structure to motifs
         for (const auto& motif : allMotifs) {
                 if (loadPermutations || !motif.isPermutation())
                         motifs.push_back(motif);
         }
+}
 
-        ifs.close();
+void MotifContainer::loadCBMotifs(const std::string& filename,
+                                  vector<Motif>& motifs)
+{
+        ifstream ifs(filename.c_str());
+        if (!ifs)
+                throw runtime_error("Could not open file: " + filename);
+
+        size_t motifID = 0;
+        while (ifs.good()) {
+                string temp;
+                getline(ifs, temp);
+                if (temp.empty())
+                        continue;
+                if (temp.front() == '>') {      // add a new motif
+                        motifs.push_back(Motif(temp.substr(1), motifID++));
+                        continue;
+                }
+                istringstream iss(temp);
+                size_t A, C, G, T;
+                iss >> A >> C >> G >> T;
+
+                motifs.back().addCharacter({A, C, G, T});
+        }
+}
+
+void MotifContainer::loadJasparMotifs(const std::string& filename,
+                                      vector<Motif>& motifs)
+{
+        ifstream ifs(filename.c_str());
+        if (!ifs)
+                throw runtime_error("Could not open file: " + filename);
+
+        size_t motifID = 0;
+        while (ifs.good()) {
+                string motifName, temp;
+                ifs >> motifName;
+                motifName = motifName.substr(1);
+                getline(ifs, temp);
+                if (!ifs)
+                        break;
+
+                vector<vector<size_t> > freq(4);
+                for (size_t i = 0; i < 4; i++) {
+                        getline(ifs, temp);
+
+                        istringstream iss(temp);
+                        iss >> temp;
+                        iss >> temp;
+
+                        while (iss) {
+                                size_t count;
+                                iss >> count;
+                                if (!iss)
+                                        break;
+
+                                freq[i].push_back(count);
+                        }
+                }
+
+                motifs.push_back(Motif(motifName, motifID++));
+                for (size_t i = 0; i < freq[0].size(); i++)
+                        motifs.back().addCharacter({freq[0][i], freq[1][i], freq[2][i], freq[3][i]});
+        }
+
+        sort(motifs.begin(), motifs.end());
+
+        //for (auto it : motifs)
+        //        cout << it.size() << endl;
 }
 
 void MotifContainer::addReverseComplements()
@@ -344,6 +410,12 @@ void MotifContainer::writePossumFile(const std::string& filename)
                 ofs << "END" << endl;
                 ofs << "END" << endl;
         }
+}
+
+void MotifContainer::writeMOODSFiles()
+{
+        for (const auto& it : motifs)
+                it.writeMOODSFile(it.getName() + ".pfm");
 }
 
 size_t MotifContainer::getMaxMotifLen() const

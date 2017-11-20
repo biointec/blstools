@@ -297,6 +297,9 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false),
                 cout << "Added reverse complementary motifs" << endl;
         }
 
+       // motifContainer.writePossumFile("motifs.possum");
+        motifContainer.writeMOODSFiles();
+
         // C) Scan the sequences
         ofstream ofsCutoff("motifCutoff.txt");
 

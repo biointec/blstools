@@ -252,6 +252,12 @@ public:
         void revCompl();
 
         /**
+         * Write the MOODS file
+         * @param filename Filename
+         */
+        void writeMOODSFile(const std::string& filename) const;
+
+        /**
          * Get the maximum PWM score for this motif
          * @return The maximum PWM score for this motif
          */
@@ -285,6 +291,10 @@ public:
                 return threshold;
         }
 
+        bool operator<(const Motif& rhs) const {
+                return size() < rhs.size();
+        }
+
         /**
          * operator<< overloading
          * @param os Output stream
@@ -311,6 +321,22 @@ public:
          * @param loadPermutations Also load the random permutations
          */
         MotifContainer(const std::string& filename, bool loadPermutations);
+
+        /**
+         * Load cluster-buster motifs from disk
+         * @param filename Filename of the motif input file
+         * @param motifs Vector to store motifs (output)
+         */
+        void loadCBMotifs(const std::string& filename,
+                          std::vector<Motif>& motifs);
+
+        /**
+         * Load Jaspar motifs from disk
+         * @param filename Filename of the motif input file
+         * @param motifs Vector to store motifs (output)
+         */
+        void loadJasparMotifs(const std::string& filename,
+                              std::vector<Motif>& motifs);
 
         /**
          * Add the reverse complement motifs to the container
@@ -349,6 +375,11 @@ public:
          * @param filename File name of the possum file
          */
         void writePossumFile(const std::string& filename);
+
+        /**
+         * Write the MOODS file
+         */
+        void writeMOODSFiles();
 
         /**
          * Get the number of motifs
