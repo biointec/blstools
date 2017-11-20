@@ -317,7 +317,8 @@ void MotifContainer::loadJasparMotifs(const std::string& filename,
         while (ifs.good()) {
                 string motifName, temp;
                 ifs >> motifName;
-                motifName = motifName.substr(1);
+                if (!motifName.empty())
+                        motifName = motifName.substr(1);
                 getline(ifs, temp);
                 if (!ifs)
                         break;
