@@ -152,7 +152,7 @@ size_t char2idx(char c)
 void Motif::PFM2PWM(const std::array<size_t, 4>& bgCounts, size_t pseudoCounts)
 {
         // compute the background probability for ACGT
-        size_t bgTotCounts = accumulate(bgCounts.begin(), bgCounts.end(), 0);
+        size_t bgTotCounts = accumulate(bgCounts.begin(), bgCounts.end(), 0ull);
         bgTotCounts += 4 * pseudoCounts;
         array<float, 4> bgProb;
         for (size_t i = 0; i < 4; i++)
@@ -167,7 +167,7 @@ void Motif::PFM2PWM(const std::array<size_t, 4>& bgCounts, size_t pseudoCounts)
         // compute the PWM
         PWM.resize(PFM.size());
         for (size_t i = 0; i < PFM.size(); i++) {
-                size_t totCounts = accumulate(PFM[i].begin(), PFM[i].end(), 0);
+                size_t totCounts = accumulate(PFM[i].begin(), PFM[i].end(), 0ull);
                 totCounts += 4 * pseudoCounts;
 
                 for (size_t j = 0; j < 4; j++) {
