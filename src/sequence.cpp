@@ -184,6 +184,7 @@ void FastaBatch::filterLine(const string& line, const SeqPos& seqPos,
 {
         SeqPos currSeqPos = seqPos;
         bool isOpen = false;
+        size_t openIdx = 0;
 
         for (size_t i = 0; i < line.size(); i++) {
                 bool isValid = ((line[i] == 'A') || (line[i] == 'a') ||
@@ -195,13 +196,12 @@ void FastaBatch::filterLine(const string& line, const SeqPos& seqPos,
                 if (isValid && !isOpen) {
                         filtSeqPos.push_back(currSeqPos);
                         isOpen = true;
+                        openIdx = i;
                 }
 
                 // close a sequence stream
                 if (!isValid && isOpen) {
-                        size_t start = filtSeqPos.back().getSeqPos();
-                        size_t end = currSeqPos.getSeqPos();
-                        filtLine.push_back(line.substr(start, end-start));
+                        filtLine.push_back(line.substr(openIdx, i - openIdx));
                         isOpen = false;
                 }
 
@@ -209,10 +209,8 @@ void FastaBatch::filterLine(const string& line, const SeqPos& seqPos,
         }
 
         // also store the trailing line
-        if (isOpen) {
-                size_t start = filtSeqPos.back().getSeqPos();
-                filtLine.push_back(line.substr(start, line.size() - start));
-        }
+        if (isOpen)
+                filtLine.push_back(line.substr(openIdx, line.size() - openIdx));
 }
 
 bool FastaBatch::appendNextBlock(SeqBlock& block, size_t maxSize)
