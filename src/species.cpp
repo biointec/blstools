@@ -55,7 +55,7 @@ void Species::computeNucleotideComposition()
                 for (size_t i = 0; i < block.size(); i++)
                         nuclCounts[char2Idx[(unsigned short)block[i]]]++;
 
-        totSeqLen = accumulate(nuclCounts.begin(), nuclCounts.end(), 0);
+        totSeqLen = accumulate(nuclCounts.begin(), nuclCounts.end(), 0ull);
 
         seqNames = batch.getSeqNames();
 }
