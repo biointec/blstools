@@ -21,6 +21,7 @@
 #include <iostream>
 #include <thread>
 #include <algorithm>
+#include <cmath>
 
 #include "hist.h"
 #include "motif.h"
@@ -89,6 +90,7 @@ void Histogram::histThread(const MotifContainer& motifContainer,
 
         // pattern matrix
         const Matrix<float> &P = motifContainer.getMatrix();
+        const auto matBlock = motifContainer.getMatrixBlock();
 
         // sequence matrix
         SeqMatrix sm(K, overlap, W);
@@ -99,7 +101,8 @@ void Histogram::histThread(const MotifContainer& motifContainer,
         while (sm.getNextSeqMatrix(seqBatch)) {
                 for (int offset = 0; offset < K; offset++) {
                         SubMatrix<float> subS = sm.getSubMatrix(offset);
-                        R.gemm(P, subS);
+                        //R.gemm(P, subS);
+                        R.gemm(P, subS, matBlock);
                         extractObsScore(R, offset, sm, motifContainer, histContainer);
                 }
 

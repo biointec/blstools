@@ -382,6 +382,31 @@ void MotifContainer::generateMatrix()
                                 P(i, 4*j+o) = fwd[j][o];
                 row2MotifID.push_back(i);
         }
+
+        size_t numBlocks = 10;
+        for (size_t i = 0; i < numBlocks; i++) {
+                size_t start = (i == 0) ? 0 : matBlock[i-1].first;
+                size_t end = (i+1) * motifs.size() / numBlocks;
+
+                size_t width = 0;
+                for (size_t j = start; j < end; j++)
+                        width = max(width, 4*motifs[j].size());
+
+                matBlock.push_back(make_pair(end, width));
+        }
+
+        size_t area = 0;
+        for (size_t i = 0; i < numBlocks; i++) {
+                size_t start = (i == 0) ? 0 : matBlock[i-1].first;
+                size_t end = matBlock[i].first;
+
+                cout << "From: " << start << " to " << end << " width: " << matBlock[i].second << endl;
+                area += 4 * (end - start) * matBlock[i].second;
+        }
+
+        size_t orig = 4 * motifs.size() * matBlock.back().second;
+        cout << "Area: " << area << " versus " << orig << endl;
+        cout << "Ratio: " << 100.0 * area / orig << endl;
 }
 
 void MotifContainer::writeMotifNames(const std::string& filename)

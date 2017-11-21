@@ -109,13 +109,15 @@ void PWMScan::scanThread(size_t speciesID, const MotifContainer& motifContainer,
 
         // result matrix
         Matrix<float> R(P.nRows(), W);
+        const auto matBlock = motifContainer.getMatrixBlock();
 
         vector<MotifOccurrence> occurrences;
 
         while (sm.getNextSeqMatrix(seqBatch)) {
                 for (int offset = 0; offset < K; offset++) {
                         SubMatrix<float> subS = sm.getSubMatrix(offset);
-                        R.gemm(P, subS);
+                        //R.gemm(P, subS);
+                        R.gemm(P, subS, matBlock);
                         extractOccurrences(R, offset, sm, motifContainer, occurrences);
                 }
 

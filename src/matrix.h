@@ -23,6 +23,7 @@
 
 #include <iostream>
 #include <cassert>
+#include <vector>
 
 // ===========================================================================
 // TEMPLATE PROTOTYPES
@@ -158,12 +159,21 @@ public:
          * @param nColB Number of column of B to consider
          */
         void gemm(const Matrix &A, const Matrix &B, int rowB, int nColB);
+
         /**
          * Perform a matrix-matrix multiplication A * submatrix(B)
          * @param A Left-hand m x k matrix
          * @param B Right-hand K x n matrix (K >= k)
          */
         void gemm(const Matrix &A, const SubMatrix<T> &B);
+
+        /**
+         * Perform a matrix-matrix multiplication A * submatrix(B)
+         * @param A Left-hand m x k matrix
+         * @param B Right-hand K x n matrix (K >= k)
+         */
+        void gemm(const Matrix &A, const SubMatrix<T> &B,
+                  const std::vector<std::pair<size_t, size_t> >& matBlocksA);
 
         /** returns the 2-norm of the matrix
         */

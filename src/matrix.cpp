@@ -71,6 +71,28 @@ void Matrix<deci>::gemm(const Matrix &A, const SubMatrix<deci> &B)
 }
 
 template <>
+void Matrix<deci>::gemm(const Matrix& A, const SubMatrix<deci>& B,
+                        const vector<pair<size_t, size_t> >& matBlocksA)
+{
+        const deci zero = 0;
+        const deci one = 1;
+
+        int LDA = A.nRows(), LDB = B.getLD(), LDC = nRows();
+        int n = B.nCols();
+
+        for (size_t i = 0; i < matBlocksA.size(); i++) {
+                size_t start = (i == 0) ? 0 : matBlocksA[i-1].first;
+                size_t end = matBlocksA[i].first;
+
+                int m = end-start;
+                int k = matBlocksA[i].second;
+
+                gemm_f77("N", "N", &m, &n, &k, &one, A.data + start, &LDA,
+                         B.getDataPtr(), &LDB, &zero, data + start, &LDC);
+        }
+}
+
+template <>
 double Matrix<dcomplex>::norm() const
 {
 	double result = 0.0;

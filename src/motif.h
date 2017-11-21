@@ -312,6 +312,8 @@ private:
         std::vector<Motif> motifs;
 
         Matrix<float> P;
+        std::vector<std::pair<size_t, size_t> > matBlock;
+
         std::vector<size_t> row2MotifID;
 
 public:
@@ -354,6 +356,14 @@ public:
          */
         const Matrix<float>& getMatrix() const {
                 return P;
+        }
+
+        /**
+         * Get a const-reference to a matrix block
+         * @return A const-reference to a matrix block
+         */
+        const std::vector<std::pair<size_t, size_t> >& getMatrixBlock() const {
+                return matBlock;
         }
 
         /**
