@@ -38,6 +38,7 @@ private:
         std::string outputFilename;
 
         bool simpleMode;
+	bool cudaMode;
 
         bool absThSpecified;
         float absThreshold;
@@ -121,6 +122,16 @@ private:
          */
         void scanPWMSimple(size_t speciesID, const MotifContainer& motifContainer,
                            FastaBatch& seqBatch, std::ostream& os);
+
+        /**
+         * Scan sequences for PWM occurrences
+         * @param motifContainer Motif MotifContainer
+         * @param seqBatch Fasta sequence batch
+         * @param os Output stream to write hits to
+         */
+        void scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContainer,
+                           FastaBatch& seqBatch, std::ostream& os);
+
 
 public:
         /**
