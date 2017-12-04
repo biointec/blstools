@@ -28,6 +28,10 @@
 #include "sequence.h"
 #include "species.h"
 
+#include <cuda_runtime.h>
+#include <cublas_v2.h>
+#include "helper_cuda.h"
+
 using namespace std;
 
 void PWMScan::printUsage() const
@@ -37,6 +41,7 @@ void PWMScan::printUsage() const
         cout << " [options]\n";
         cout << "  -h\t--help\t\tdisplay help message\n";
         cout << "  -s\t--simple\tenable simple (slower) scan algorithm\n";
+        cout << "  -c\t--cuda\tenable the CUDA scan algorithm\n";
         cout << "  -rc\t--revcompl\talso search the reverse strand for occurrences\n\n";
 
         cout << " [options arg]\n";
@@ -207,7 +212,80 @@ void PWMScan::scanPWMSimple(size_t speciesID, const MotifContainer& motifContain
         cout << endl;
 }
 
-PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false),
+void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContainer,
+                            FastaBatch& seqBatch, std::ostream& os)
+{
+	cublasHandle_t handle;
+    	cublasStatus_t status = cublasCreate(&handle);
+
+	float *d_P = 0;
+    	float *d_S = 0;
+    	float *d_R = 0;
+
+    	float alpha = 1.0f;
+    	float beta = 0.0f;
+
+        size_t overlap = motifContainer.getMaxMotifLen() - 1;
+        size_t K = 1000;                 // choose freely
+        size_t W = 4*K;                 // choose freely
+
+        // pattern matrix
+        const Matrix<float> &P = motifContainer.getMatrix();
+
+        // sequence matrix
+        SeqMatrix sm(K, overlap, W);
+
+        // result matrix
+        Matrix<float> R(P.nRows(), W);
+
+        vector<MotifOccurrence> occurrences;
+
+    	/* Allocate device memory for the matrices */
+    	if (cudaMalloc((void **)&d_P, P.nRows() * P.nCols() * sizeof(float)) != cudaSuccess)
+    	{
+        	fprintf(stderr, "!!!! device memory allocation error (allocate P)\n");
+    	}
+
+    	if (cudaMalloc((void **)&d_R, R.nRows() * R.nCols() * sizeof(float)) != cudaSuccess)
+    	{
+        	fprintf(stderr, "!!!! device memory allocation error (allocate R)\n");
+    	}
+
+    	if (cudaMalloc((void **)&d_S, 4 * (K + overlap) * W * sizeof(float)) != cudaSuccess)
+    	{
+        	fprintf(stderr, "!!!! device memory allocation error (allocate S)\n");
+    	}
+
+	status = cublasSetVector(P.nRows() * P.nCols(), sizeof(float), P.data, 1, d_P, 1);
+
+        while (sm.getNextSeqMatrix(seqBatch)) {
+		status = cublasSetVector(4 * (K + overlap) * W, sizeof(float), sm.S.data, 1, d_S, 1);
+
+                for (int offset = 0; offset < K; offset++) {
+                        SubMatrix<float> subS = sm.getSubMatrix(offset);
+			//status = cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, R.nRows(), R.nCols(), P.nCols(), &alpha, d_P, P.nRows(), d_S + offset, sm.S.nRows(), &beta, d_R, R.nRows());
+			//status = cublasGetVector(R.nRows() * R.nCols(), sizeof(float), d_R, 1, R.data, 1);
+                        //R.gemm(P, subS);
+                        //extractOccurrences(R, offset, sm, motifContainer, occurrences);
+                }
+
+                // write the occurrences to disk
+                lock_guard<mutex> lock(myMutex);
+                for (auto o : occurrences)
+                        os << o.getMotifID() << "\t" << speciesID << "\t"
+                           << o.getSequenceID() << "\t" << o.getSequencePos()
+                           << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";
+
+                totMatches += occurrences.size();
+                occurrences.clear();
+
+                cout << "."; cout.flush();
+        }
+
+	status = cublasDestroy(handle);
+}
+
+PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
         outputFilename("occurrences.txt"),
         absThSpecified(false), absThreshold(0.0), relThSpecified(false),
         relThreshold(0.95), pvalueSpecified(false), pvalue(0.001),
@@ -231,6 +309,8 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false),
                         revCompl = true;
                 } else if ((arg == "-s") || (arg == "--simple")) {
                         simpleMode = true;
+                } else if ((arg == "-c") || (arg == "--cuda")) {
+                        cudaMode = true;
                 } else if (((arg == "-at") || (arg == "--absthreshold")) && (i+1 < argc-2)) {
                         absThSpecified = true;
                         absThreshold = atof(argv[i+1]);
@@ -354,7 +434,9 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false),
                 // scan the sequences for PWM occurrences
                 if (simpleMode) {
                         scanPWMSimple(speciesID++, motifContainer, seqBatch, os);
-                } else {
+                } if (cudaMode) {
+			scanPWMCUBLAS(speciesID++, motifContainer, seqBatch, os);
+		} else {
                         scanPWM(speciesID++, motifContainer, seqBatch, os);
                 }
         }

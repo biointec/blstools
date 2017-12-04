@@ -20,6 +20,8 @@
 
 #include <string>
 #include <iostream>
+#include <cuda_runtime.h>
+#include <cublas_v2.h>
 
 #include "dict.h"
 #include "blstools.h"
@@ -27,8 +29,10 @@
 #include "pwmscan.h"
 #include "ortho.h"
 #include "hist.h"
+#include "helper_cuda.h"
 
 using namespace std;
+
 
 void printProgramVersion()
 {
@@ -112,6 +116,8 @@ void runOrthoModule(int argc, char **argv)
 int main(int argc, char **argv)
 {
         Command command = Command::none;
+
+    	int dev = findCudaDevice(argc, (const char **) argv);
 
         // parse first parameter
         if (argc > 1) {
