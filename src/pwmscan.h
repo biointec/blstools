@@ -40,6 +40,8 @@ private:
 
         std::string outputFilename;
 
+        std::string outputFilename;
+
         bool absThSpecified;
         float absThreshold;
 
