@@ -122,7 +122,7 @@ void ScoreHistogram::loadHistogram(const std::string& dir,
                 delete [] counts;
         counts = new std::atomic<size_t>[numBins];
 
-        for (int i = 0; i < numBins; i++) {
+        for (size_t i = 0; i < numBins; i++) {
                 float bin; size_t val;
                 ifs >> bin >> val;
                 counts[i] = val;
@@ -383,7 +383,7 @@ void MotifContainer::generateMatrix()
                 row2MotifID.push_back(i);
         }
 
-        size_t numBlocks = 10;
+        size_t numBlocks = 1;
         for (size_t i = 0; i < numBlocks; i++) {
                 size_t start = (i == 0) ? 0 : matBlock[i-1].first;
                 size_t end = (i+1) * motifs.size() / numBlocks;
@@ -407,6 +407,16 @@ void MotifContainer::generateMatrix()
         size_t orig = 4 * motifs.size() * matBlock.back().second;
         cout << "Area: " << area << " versus " << orig << endl;
         cout << "Ratio: " << 100.0 * area / orig << endl;
+
+        /*vector<size_t> height(4*getMaxMotifLen(), 0);
+        for (size_t i = 0; i < motifs.size(); i++)
+                for (size_t j = 0; j < 4*motifs[i].size(); j++)
+                        height[j]++;
+
+        // FIXME :DELETE ME
+        ofstream ofs("hist.dat");
+        for (size_t i = 0; i < height.size(); i++)
+                ofs << i+1 << "\t" << height[i] << "\n";*/
 }
 
 void MotifContainer::writeMotifNames(const std::string& filename)

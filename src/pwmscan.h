@@ -35,9 +35,9 @@
 class PWMScan
 {
 private:
-        std::string outputFilename;
-
         bool simpleMode;
+
+        std::string outputFilename;
 
         bool absThSpecified;
         float absThreshold;

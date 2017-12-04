@@ -149,7 +149,7 @@ template<>
 void Matrix<deci>::printSequence(size_t overlap) const
 {
         cout << "Print matrix: " << nRows() << " x " << nCols() << endl;
-        size_t K = nRows() / 4 - overlap;
+        int K = nRows() / 4 - overlap;
         cout << "K: " << K << ", overlap: " << overlap << endl;
 
         for (int r = 0; r < nRows(); r += 4) {

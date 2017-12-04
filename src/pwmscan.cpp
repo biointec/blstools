@@ -71,7 +71,7 @@ void PWMScan::extractOccurrences(const Matrix<float>& R, size_t offset,
                                  vector<MotifOccurrence>& motifOcc)
 {
         for (size_t j = 0; j < sm.getNumOccCol(); j++) {
-                for (size_t i = 0; i < R.nRows(); i++) {
+                for (size_t i = 0; i < (size_t)R.nRows(); i++) {
                         float thisScore = R(i,j);
                         size_t motifIdx = motifContainer.getMotifIDAtRow(i);
                         const Motif& m = motifContainer[motifIdx];
@@ -114,7 +114,7 @@ void PWMScan::scanThread(size_t speciesID, const MotifContainer& motifContainer,
         vector<MotifOccurrence> occurrences;
 
         while (sm.getNextSeqMatrix(seqBatch)) {
-                for (int offset = 0; offset < K; offset++) {
+                for (size_t offset = 0; offset < K; offset++) {
                         SubMatrix<float> subS = sm.getSubMatrix(offset);
                         //R.gemm(P, subS);
                         R.gemm(P, subS, matBlock);
