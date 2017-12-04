@@ -264,7 +264,7 @@ Ortho::Ortho(int argc, char ** argv)
                         ofsBLS << endl;
 
                         float intWidth = 1.0 / numBLSIntv;
-                        int end = floor(BLS / intWidth) + 1;
+                        size_t end = floor(BLS / intWidth) + 1;
                         if (end > numBLSIntv)
                                 end = numBLSIntv;
 
@@ -274,7 +274,7 @@ Ortho::Ortho(int argc, char ** argv)
 
                 cout << i << "\t" << motifContainer[i].getName();
                 ofsCounts << i << "\t" << motifContainer[i].getName();
-                for (int j = 0; j < numBLSIntv; j++) {
+                for (size_t j = 0; j < numBLSIntv; j++) {
                         cout << "\t" << counts[j];
                         ofsCounts << "\t" << counts[j];
                 }

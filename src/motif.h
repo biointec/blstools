@@ -58,7 +58,7 @@ public:
         {
                 width = (maxScore - minScore) / (float)numBins;
                 counts = new std::atomic<size_t>[numBins];
-                for (int i = 0; i < numBins; i++)
+                for (size_t i = 0; i < numBins; i++)
                         counts[i] = 0;
         }
 
@@ -73,7 +73,7 @@ public:
                 numBins = S.numBins;
 
                 counts = new std::atomic<size_t>[numBins];
-                for (int i = 0; i < numBins; i++)
+                for (size_t i = 0; i < numBins; i++)
                         counts[i].store(S.counts[i].load());
         }
 
@@ -94,7 +94,7 @@ public:
         }
 
         void print() const {
-                for (int i = 0; i < numBins; i++) {
+                for (size_t i = 0; i < numBins; i++) {
                       //  std::cout << i*width + minScore << "\t";
                        // std::cout << (i+1)*width + minScore << "\t";
                         std::cout << counts[i] << std::endl;
