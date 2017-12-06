@@ -45,7 +45,7 @@ void PWMScan::printUsage() const
         cout << " [options]\n";
         cout << "  -h\t--help\t\tdisplay help message\n";
         cout << "  -s\t--simple\tenable simple (slower) scan algorithm\n";
-        cout << "  -c\t--cuda\tenable the CUDA scan algorithm\n";
+        cout << "  -c\t--cuda\t\tenable the CUDA scan algorithm\n";
         cout << "  -rc\t--revcompl\talso search the reverse strand for occurrences\n\n";
 
         cout << " [options arg]\n";
@@ -380,6 +380,16 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
                 cout << "."; cout.flush();
         }
 
+	delete [] threshold;
+
+	cudaFree(d_P);
+	cudaFree(d_S);
+	cudaFree(d_R);
+	cudaFree(d_threshold);
+	cudaFree(d_occScore);
+	cudaFree(d_occIdx);
+	cudaFree(d_nOcc);
+
 	cublasDestroy(handle);
 }
 
@@ -394,12 +404,15 @@ void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContain
                 return;
         }
 
+	if (numThreads < numDevices)
+		numDevices = numThreads;
+
         cout << "Using " << numDevices << " GPU devices" << endl;
 
         // start one thread per GPU device
         vector<thread> workerThreads(numDevices);
         for (size_t i = 0; i < workerThreads.size(); i++)
-                workerThreads[i] = thread(&PWMScan::scanThreadCUBLAS, this, speciesID,
+                workerThreads[i] = thread(&PWMScan::scanThreadCUBLAS, this, i, speciesID,
                                           cref(motifContainer),
                                           ref(seqBatch), ref(os));
 
