@@ -34,20 +34,33 @@ endif()
 
 find_package(BLAS REQUIRED)
 find_package(Threads REQUIRED)
-find_package(CUDA)
-
-# Do not propagate the -std=c++11 flag to nvcc
-set(CUDA_PROPAGATE_HOST_FLAGS "OFF")
 
 # write the config.h configuration file
 configure_file(cmake/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/src/config.h)
 add_definitions(-DHAVE_CONFIG_H)
 
-include_directories("${CMAKE_CURRENT_BINARY_DIR}/src" ${CUDA_INCLUDE_DIRS})
+include_directories("${CMAKE_CURRENT_BINARY_DIR}/src")
 
-cuda_add_executable(blstools src/dict.cpp src/hist.cpp src/blstools.cpp src/bls.cpp
+add_executable(blstools src/dict.cpp src/hist.cpp src/blstools.cpp src/bls.cpp
         src/phylotree.cpp src/matrix.cpp src/pwmscan.cpp src/motif.cpp
-        src/sequence.cpp  src/ortho.cpp src/species.cpp src/kernel.cu)
-target_link_libraries(blstools ${BLAS_LIBRARIES} ${CUDA_LIBRARIES} ${CUDA_CUBLAS_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
-
+        src/sequence.cpp  src/ortho.cpp src/species.cpp)
+target_link_libraries(blstools ${BLAS_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 install(TARGETS blstools RUNTIME DESTINATION bin)
+
+find_package(CUDA QUIET)
+if (HAVE_CUDA)
+        # Do not propagate the -std=c++11 flag to nvcc
+        set(CUDA_PROPAGATE_HOST_FLAGS "OFF")
+
+        add_definitions(-DHAVE_CUDA)
+
+        include_directories(${CUDA_INCLUDE_DIRS})
+
+        cuda_add_executable(blstools src/dict.cpp src/hist.cpp src/blstools.cpp
+                src/bls.cpp src/phylotree.cpp src/matrix.cpp src/pwmscan.cpp
+                src/motif.cpp src/sequence.cpp  src/ortho.cpp src/species.cpp
+                src/kernel.cu)
+        target_link_libraries(blstools_GPU ${BLAS_LIBRARIES} ${CUDA_LIBRARIES}
+                ${CUDA_CUBLAS_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+        install(TARGETS blstools_GPU RUNTIME DESTINATION bin)
+endif()

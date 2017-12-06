@@ -28,9 +28,11 @@
 #include "sequence.h"
 #include "species.h"
 
-#include <cuda_runtime.h>
-#include <cublas_v2.h>
-#include "helper_cuda.h"
+#ifdef HAVE_CUDA
+        #include <cuda_runtime.h>
+        #include <cublas_v2.h>
+        #include "helper_cuda.h"
+#endif
 
 using namespace std;
 
@@ -112,8 +114,8 @@ void extractOccurrences2(int m, const map<int, int>& offset_v, int *occIdx, floa
 
 		for (int c = 0; c < thisOcc; c++, idx++) {
 			float thisScore = occScore[idx];
-			int i = idx % m;
-			int j = idx / m;
+			int i = occIdx[idx] % m;
+			int j = occIdx[idx] / m;
 
 			size_t motifIdx = motifContainer.getMotifIDAtRow(i);
 	                const Motif& m = motifContainer[motifIdx];
@@ -132,7 +134,7 @@ void extractOccurrences2(int m, const map<int, int>& offset_v, int *occIdx, floa
 	}
 }
 
-void PWMScan::scanThread(size_t speciesID, const MotifContainer& motifContainer,
+void PWMScan::scanThreadBLAS(size_t speciesID, const MotifContainer& motifContainer,
                          FastaBatch& seqBatch, ostream& os)
 {
         size_t overlap = motifContainer.getMaxMotifLen() - 1;
@@ -173,7 +175,7 @@ void PWMScan::scanThread(size_t speciesID, const MotifContainer& motifContainer,
         }
 }
 
-void PWMScan::scanThreadSimple(size_t speciesID, const MotifContainer& motifContainer,
+void PWMScan::scanThreadNaive(size_t speciesID, const MotifContainer& motifContainer,
                                FastaBatch& seqBatch, std::ostream& os)
 {
         vector<MotifOccurrence> occurrences;
@@ -198,10 +200,10 @@ void PWMScan::scanThreadSimple(size_t speciesID, const MotifContainer& motifCont
 
                 // write the occurrences to disk
                 lock_guard<mutex> lock(myMutex);
-   /*             for (auto o : occurrences)
+                for (auto o : occurrences)
                         os << o.getMotifID() << "\t" << speciesID << "\t"
                            << o.getSequenceID() << "\t" << o.getSequencePos()
-                           << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";*/
+                           << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";
 
                 totMatches += occurrences.size();
                 occurrences.clear();
@@ -209,7 +211,7 @@ void PWMScan::scanThreadSimple(size_t speciesID, const MotifContainer& motifCont
 }
 
 
-void PWMScan::scanPWM(size_t speciesID, const MotifContainer& motifContainer,
+void PWMScan::scanPWMBLAS(size_t speciesID, const MotifContainer& motifContainer,
                       FastaBatch& seqBatch, std::ostream& os)
 {
         cout << "Using " << numThreads << " threads" << endl;
@@ -217,7 +219,7 @@ void PWMScan::scanPWM(size_t speciesID, const MotifContainer& motifContainer,
         // start histogram threads
         vector<thread> workerThreads(numThreads);
         for (size_t i = 0; i < workerThreads.size(); i++)
-                workerThreads[i] = thread(&PWMScan::scanThread, this, speciesID,
+                workerThreads[i] = thread(&PWMScan::scanThreadBLAS, this, speciesID,
                                           cref(motifContainer),
                                           ref(seqBatch), ref(os));
 
@@ -227,7 +229,7 @@ void PWMScan::scanPWM(size_t speciesID, const MotifContainer& motifContainer,
         cout << endl;
 }
 
-void PWMScan::scanPWMSimple(size_t speciesID, const MotifContainer& motifContainer,
+void PWMScan::scanPWMNaive(size_t speciesID, const MotifContainer& motifContainer,
                             FastaBatch& seqBatch, std::ostream& os)
 {
         cout << "Using " << numThreads << " threads" << endl;
@@ -235,7 +237,7 @@ void PWMScan::scanPWMSimple(size_t speciesID, const MotifContainer& motifContain
         // start histogram threads
         vector<thread> workerThreads(numThreads);
         for (size_t i = 0; i < workerThreads.size(); i++)
-                workerThreads[i] = thread(&PWMScan::scanThreadSimple, this, speciesID,
+                workerThreads[i] = thread(&PWMScan::scanThreadNaive, this, speciesID,
                                           cref(motifContainer),
                                           ref(seqBatch), ref(os));
 
@@ -245,9 +247,13 @@ void PWMScan::scanPWMSimple(size_t speciesID, const MotifContainer& motifContain
         cout << endl;
 }
 
-void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContainer,
-                            FastaBatch& seqBatch, std::ostream& os)
+#ifdef HAVE_CUDA
+void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
+                               const MotifContainer& motifContainer,
+                               FastaBatch& seqBatch, std::ostream& os)
 {
+        cudaSetDevice(devID);
+
 	cublasHandle_t handle;
 	cublasCreate(&handle);
 
@@ -376,6 +382,33 @@ void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContain
 
 	cublasDestroy(handle);
 }
+
+void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContainer,
+                            FastaBatch& seqBatch, std::ostream& os)
+{
+        int numDevices;
+        cudaGetDeviceCount(&numDevices);
+
+        if (numDevices == 0) {
+                cerr << "CUDA error: no devices found. Aborting..." << endl;
+                return;
+        }
+
+        cout << "Using " << numDevices << " GPU devices" << endl;
+
+        // start one thread per GPU device
+        vector<thread> workerThreads(numDevices);
+        for (size_t i = 0; i < workerThreads.size(); i++)
+                workerThreads[i] = thread(&PWMScan::scanThreadCUBLAS, this, speciesID,
+                                          cref(motifContainer),
+                                          ref(seqBatch), ref(os));
+
+        // wait for worker threads to finish
+        for_each(workerThreads.begin(), workerThreads.end(), mem_fn(&thread::join));
+
+        cout << endl;
+}
+#endif
 
 PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
         outputFilename("occurrences.txt"),
@@ -525,11 +558,16 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
 
                 // scan the sequences for PWM occurrences
                 if (simpleMode) {
-                        scanPWMSimple(speciesID++, motifContainer, seqBatch, os);
+                        scanPWMNaive(speciesID++, motifContainer, seqBatch, os);
                 } else if (cudaMode) {
-			scanPWMCUBLAS(speciesID++, motifContainer, seqBatch, os);
-		} else {
-                        scanPWM(speciesID++, motifContainer, seqBatch, os);
+#ifdef HAVE_CUDA
+                        scanPWMCUBLAS(speciesID++, motifContainer, seqBatch, os);
+#else
+                        cerr << "ERROR: CUDA support not enabled in blstools\n";
+                        cerr << "Please recompile with CUDA support enabled" << endl;
+#endif
+                } else {
+                        scanPWMBLAS(speciesID++, motifContainer, seqBatch, os);
                 }
         }
 
