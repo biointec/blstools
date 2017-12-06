@@ -34,6 +34,8 @@
 
 using namespace std;
 
+extern void kernel_wrapper(float *R, int m, int n, float *threshold, int* occIdx, float* occScore, int *nOcc);
+
 void PWMScan::printUsage() const
 {
         cout << "Usage: blstools scan [options] motifs.input sequences.input\n\n";
@@ -81,7 +83,7 @@ void PWMScan::extractOccurrences(const Matrix<float>& R, size_t offset,
                         size_t motifIdx = motifContainer.getMotifIDAtRow(i);
                         const Motif& m = motifContainer[motifIdx];
 
-                        if (thisScore < (m.getThreshold() - 1e-5))
+                        if (thisScore < m.getThreshold())
                                 continue;
 
                         // at this point an occurrence is found
@@ -97,6 +99,37 @@ void PWMScan::extractOccurrences(const Matrix<float>& R, size_t offset,
                                                            seqPos.getSeqPos(), strand, thisScore));
                 }
         }
+}
+
+void extractOccurrences2(int m, const map<int, int>& offset_v, int *occIdx, float *occScore,
+			 SeqMatrix& sm, const MotifContainer& motifContainer,
+			 vector<MotifOccurrence>& motifOcc)
+{
+	int idx = 0;
+	for (const auto& it: offset_v) {
+		int offset = it.first;
+		int thisOcc = it.second;
+
+		for (int c = 0; c < thisOcc; c++, idx++) {
+			float thisScore = occScore[idx];
+			int i = idx % m;
+			int j = idx / m;
+
+			size_t motifIdx = motifContainer.getMotifIDAtRow(i);
+	                const Motif& m = motifContainer[motifIdx];
+
+        	        SeqPos seqPos = sm.getSeqPos(offset, j);
+	                size_t remSeqLen = sm.getRemainingSeqLen(offset, j);
+
+        	        if (m.size() > remSeqLen)
+				continue;
+
+			char strand = m.isRevCompl() ? '-' : '+';
+
+        	        motifOcc.push_back(MotifOccurrence(m.getID(), seqPos.getSeqIndex(),
+                                           seqPos.getSeqPos(), strand, thisScore));
+		}
+	}
 }
 
 void PWMScan::scanThread(size_t speciesID, const MotifContainer& motifContainer,
@@ -153,7 +186,7 @@ void PWMScan::scanThreadSimple(size_t speciesID, const MotifContainer& motifCont
                                 if (m.size() > (line.size() - i))
                                         continue;
                                 float thisScore = m.getScore(line.substr(i, m.size()));
-                                if (thisScore < (m.getThreshold() - 1e-5))
+                                if (thisScore < m.getThreshold())
                                         continue;
 
                                 char strand = m.isRevCompl() ? '-' : '+';
@@ -165,10 +198,10 @@ void PWMScan::scanThreadSimple(size_t speciesID, const MotifContainer& motifCont
 
                 // write the occurrences to disk
                 lock_guard<mutex> lock(myMutex);
-                for (auto o : occurrences)
+   /*             for (auto o : occurrences)
                         os << o.getMotifID() << "\t" << speciesID << "\t"
                            << o.getSequenceID() << "\t" << o.getSequencePos()
-                           << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";
+                           << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";*/
 
                 totMatches += occurrences.size();
                 occurrences.clear();
@@ -216,17 +249,21 @@ void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContain
                             FastaBatch& seqBatch, std::ostream& os)
 {
 	cublasHandle_t handle;
-    	cublasStatus_t status = cublasCreate(&handle);
+	cublasCreate(&handle);
 
 	float *d_P = 0;
     	float *d_S = 0;
     	float *d_R = 0;
+	float *d_threshold = 0;
+	float *d_occScore = 0;
+	int *d_occIdx = 0;
+	int *d_nOcc = 0;
 
     	float alpha = 1.0f;
     	float beta = 0.0f;
 
         size_t overlap = motifContainer.getMaxMotifLen() - 1;
-        size_t K = 1000;                 // choose freely
+        size_t K = 250;                 // choose freely
         size_t W = 4*K;                 // choose freely
 
         // pattern matrix
@@ -240,7 +277,7 @@ void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContain
 
         vector<MotifOccurrence> occurrences;
 
-    	/* Allocate device memory for the matrices */
+    	// Allocate device memory for the matrices
     	if (cudaMalloc((void **)&d_P, P.nRows() * P.nCols() * sizeof(float)) != cudaSuccess)
     	{
         	fprintf(stderr, "!!!! device memory allocation error (allocate P)\n");
@@ -256,18 +293,73 @@ void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContain
         	fprintf(stderr, "!!!! device memory allocation error (allocate S)\n");
     	}
 
-	status = cublasSetVector(P.nRows() * P.nCols(), sizeof(float), P.data, 1, d_P, 1);
+        if (cudaMalloc((void **)&d_threshold, R.nRows() * sizeof(float)) != cudaSuccess)
+        {
+                fprintf(stderr, "!!!! device memory allocation error (allocate thresholds)\n");
+        }
+
+	float *occScore = new float[2*R.nRows() * R.nCols()];
+        if (cudaMalloc((void **)&d_occScore, 2 * R.nRows() * R.nCols() * sizeof(float)) != cudaSuccess)
+        {
+                fprintf(stderr, "!!!! device memory allocation error (allocate occScore)\n");
+        }
+
+	int *occIdx = new int[2*R.nRows() * R.nCols()];
+        if (cudaMalloc((void **)&d_occIdx, 2 * R.nRows() * R.nCols() * sizeof(int)) != cudaSuccess)
+        {
+                fprintf(stderr, "!!!! device memory allocation error (allocate occIdx)\n");
+        }
+
+        if (cudaMalloc((void **)&d_nOcc, sizeof(int)) != cudaSuccess)
+        {
+                fprintf(stderr, "!!!! device memory allocation error (allocate nOcc)\n");
+        }
+
+	cublasSetVector(P.nRows() * P.nCols(), sizeof(float), P.data, 1, d_P, 1);
+
+	// set the thresholds
+	float *threshold = new float[R.nRows()];
+	for (size_t i = 0; i < R.nRows(); i++) {
+	        size_t motifID = motifContainer.getMotifIDAtRow(i);
+                const Motif& m = motifContainer[motifID];
+		threshold[i] = m.getThreshold();
+	}
+
+	cublasSetVector(R.nRows(), sizeof(float), threshold, 1, d_threshold, 1);
+
+	// set the number of occurrences
+        int nOcc = 0;
+        cublasSetVector(1, sizeof(int), &nOcc, 1, d_nOcc, 1);
+
+	map<int, int> offset_v;
 
         while (sm.getNextSeqMatrix(seqBatch)) {
-		status = cublasSetVector(4 * (K + overlap) * W, sizeof(float), sm.S.data, 1, d_S, 1);
+		cublasSetVector(4 * (K + overlap) * W, sizeof(float), sm.S.data, 1, d_S, 1);
 
-                for (int offset = 0; offset < K; offset++) {
-                        SubMatrix<float> subS = sm.getSubMatrix(offset);
-			//status = cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, R.nRows(), R.nCols(), P.nCols(), &alpha, d_P, P.nRows(), d_S + offset, sm.S.nRows(), &beta, d_R, R.nRows());
-			//status = cublasGetVector(R.nRows() * R.nCols(), sizeof(float), d_R, 1, R.data, 1);
-                        //R.gemm(P, subS);
-                        //extractOccurrences(R, offset, sm, motifContainer, occurrences);
+                for (size_t offset = 0; offset < K; offset++) {
+			cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, R.nRows(), R.nCols(), P.nCols(), &alpha, d_P, P.nRows(), d_S + 4 * offset, sm.S.nRows(), &beta, d_R, R.nRows());
+			kernel_wrapper(d_R, R.nRows(), R.nCols(), d_threshold, d_occIdx, d_occScore, d_nOcc);
+			int prevOcc = nOcc;
+			cublasGetVector(1, sizeof(int), d_nOcc, 1, &nOcc, 1);
+			offset_v[offset] = nOcc - prevOcc;
+			if (nOcc > R.nRows() * R.nCols()) {
+				cout << "Writing occurrences " << nOcc << endl;
+				cublasGetVector(nOcc, sizeof(float), d_occScore, 1, occScore, 1);
+				cublasGetVector(nOcc, sizeof(int), d_occIdx, 1, occIdx, 1);
+				extractOccurrences2(R.nRows(), offset_v, occIdx, occScore, sm, motifContainer, occurrences);
+				offset_v.clear();
+				nOcc = 0;
+				cublasSetVector(1, sizeof(int), &nOcc, 1, d_nOcc, 1);
+			}
                 }
+
+	        cublasGetVector(1, sizeof(int), d_nOcc, 1, &nOcc, 1);
+		cublasGetVector(nOcc, sizeof(float), d_occScore, 1, occScore, 1);
+                cublasGetVector(nOcc, sizeof(int), d_occIdx, 1, occIdx, 1);
+                extractOccurrences2(R.nRows(), offset_v, occIdx, occScore, sm, motifContainer, occurrences);
+		offset_v.clear();
+                nOcc = 0;
+                cublasSetVector(1, sizeof(int), &nOcc, 1, d_nOcc, 1);
 
                 // write the occurrences to disk
                 lock_guard<mutex> lock(myMutex);
@@ -282,7 +374,7 @@ void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContain
                 cout << "."; cout.flush();
         }
 
-	status = cublasDestroy(handle);
+	cublasDestroy(handle);
 }
 
 PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
@@ -380,7 +472,7 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
         }
 
        // motifContainer.writePossumFile("motifs.possum");
-        motifContainer.writeMOODSFiles();
+       // motifContainer.writeMOODSFiles();
 
         // C) Scan the sequences
         ofstream ofsCutoff("motifCutoff.txt");
@@ -434,7 +526,7 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
                 // scan the sequences for PWM occurrences
                 if (simpleMode) {
                         scanPWMSimple(speciesID++, motifContainer, seqBatch, os);
-                } if (cudaMode) {
+                } else if (cudaMode) {
 			scanPWMCUBLAS(speciesID++, motifContainer, seqBatch, os);
 		} else {
                         scanPWM(speciesID++, motifContainer, seqBatch, os);
