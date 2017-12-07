@@ -236,7 +236,7 @@ void PWMScan::scanPWMBLAS(size_t speciesID, const MotifContainer& motifContainer
 #ifdef HAVE_CUDA
 void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
                                const MotifContainer& motifContainer,
-                               FastaBatch& seqBatch, std::ostream& os)
+                               FastaBatch& seqBatch)
 {
         const float alpha = 1.0f;
         const float beta = 0.0f;
@@ -350,7 +350,7 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
 }
 
 void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContainer,
-                            FastaBatch& seqBatch, std::ostream& os)
+                            FastaBatch& seqBatch)
 {
         int numDevices;
         cudaGetDeviceCount(&numDevices);
