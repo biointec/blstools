@@ -242,7 +242,8 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
         const float beta = 0.0f;
 
         float *d_P = 0, *d_S = 0, *d_R = 0;
-        float *d_threshold = 0, *d_occScore = 0, *d_occIdx = 0, *d_nOcc = 0;
+        float *d_threshold = 0, *d_occScore = 0;
+        int *d_occIdx = 0, *d_nOcc = 0;
 
         size_t overlap = motifContainer.getMaxMotifLen() - 1;
         size_t K = 250;                 // choose freely
