@@ -252,93 +252,68 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
                                const MotifContainer& motifContainer,
                                FastaBatch& seqBatch, std::ostream& os)
 {
-        cudaSetDevice(devID);
+        const float alpha = 1.0f;
+        const float beta = 0.0f;
 
-	cublasHandle_t handle;
-	cublasCreate(&handle);
-
-	float *d_P = 0;
-    	float *d_S = 0;
-    	float *d_R = 0;
-	float *d_threshold = 0;
-	float *d_occScore = 0;
-	int *d_occIdx = 0;
-	int *d_nOcc = 0;
-
-    	float alpha = 1.0f;
-    	float beta = 0.0f;
+        float *d_P = 0, *d_S = 0, *d_R = 0;
+        float *d_threshold = 0, *d_occScore = 0, *d_occIdx = 0, *d_nOcc = 0;
 
         size_t overlap = motifContainer.getMaxMotifLen() - 1;
         size_t K = 250;                 // choose freely
         size_t W = 4*K;                 // choose freely
 
+        // set CUDA device for this thread
+        cudaSetDevice(devID);
+
+        // create a CUBLAS handle
+        cublasHandle_t handle;
+        cublasCreate(&handle);
+
         // pattern matrix
         const Matrix<float> &P = motifContainer.getMatrix();
+        if (cudaMalloc((void **)&d_P, P.nRows() * P.nCols() * sizeof(float)) != cudaSuccess)
+                throw runtime_error("Cannot allocate memory on CUDA device\n");
+        cublasSetVector(P.nRows() * P.nCols(), sizeof(float), P.data, 1, d_P, 1);
 
         // sequence matrix
         SeqMatrix sm(K, overlap, W);
+        if (cudaMalloc((void **)&d_S, 4 * (K + overlap) * W * sizeof(float)) != cudaSuccess)
+                throw runtime_error("Cannot allocate memory on CUDA device\n");
 
         // result matrix
         Matrix<float> R(P.nRows(), W);
+        if (cudaMalloc((void **)&d_R, R.nRows() * R.nCols() * sizeof(float)) != cudaSuccess)
+                throw runtime_error("Cannot allocate memory on CUDA device\n");
 
-        vector<MotifOccurrence> occurrences;
-
-    	// Allocate device memory for the matrices
-    	if (cudaMalloc((void **)&d_P, P.nRows() * P.nCols() * sizeof(float)) != cudaSuccess)
-    	{
-        	fprintf(stderr, "!!!! device memory allocation error (allocate P)\n");
-    	}
-
-    	if (cudaMalloc((void **)&d_R, R.nRows() * R.nCols() * sizeof(float)) != cudaSuccess)
-    	{
-        	fprintf(stderr, "!!!! device memory allocation error (allocate R)\n");
-    	}
-
-    	if (cudaMalloc((void **)&d_S, 4 * (K + overlap) * W * sizeof(float)) != cudaSuccess)
-    	{
-        	fprintf(stderr, "!!!! device memory allocation error (allocate S)\n");
-    	}
+        // set the thresholds
+        float *threshold = new float[R.nRows()];
+        for (size_t i = 0; i < R.nRows(); i++) {
+                size_t motifID = motifContainer.getMotifIDAtRow(i);
+                const Motif& m = motifContainer[motifID];
+                threshold[i] = m.getThreshold();
+        }
 
         if (cudaMalloc((void **)&d_threshold, R.nRows() * sizeof(float)) != cudaSuccess)
-        {
-                fprintf(stderr, "!!!! device memory allocation error (allocate thresholds)\n");
-        }
+                throw runtime_error("Cannot allocate memory on CUDA device\n");
+        cublasSetVector(R.nRows(), sizeof(float), threshold, 1, d_threshold, 1);
+        delete [] threshold;
 
-	float *occScore = new float[2*R.nRows() * R.nCols()];
+        // data structures for the occurrences
+        vector<MotifOccurrence> occurrences;
+        float *occScore = new float[2*R.nRows() * R.nCols()];
         if (cudaMalloc((void **)&d_occScore, 2 * R.nRows() * R.nCols() * sizeof(float)) != cudaSuccess)
-        {
-                fprintf(stderr, "!!!! device memory allocation error (allocate occScore)\n");
-        }
+                throw runtime_error("Cannot allocate memory on CUDA device\n");
 
-	int *occIdx = new int[2*R.nRows() * R.nCols()];
+        int *occIdx = new int[2*R.nRows() * R.nCols()];
         if (cudaMalloc((void **)&d_occIdx, 2 * R.nRows() * R.nCols() * sizeof(int)) != cudaSuccess)
-        {
-                fprintf(stderr, "!!!! device memory allocation error (allocate occIdx)\n");
-        }
+                throw runtime_error("Cannot allocate memory on CUDA device\n");
 
-        if (cudaMalloc((void **)&d_nOcc, sizeof(int)) != cudaSuccess)
-        {
-                fprintf(stderr, "!!!! device memory allocation error (allocate nOcc)\n");
-        }
-
-	cublasSetVector(P.nRows() * P.nCols(), sizeof(float), P.data, 1, d_P, 1);
-
-	// set the thresholds
-	float *threshold = new float[R.nRows()];
-	for (size_t i = 0; i < R.nRows(); i++) {
-	        size_t motifID = motifContainer.getMotifIDAtRow(i);
-                const Motif& m = motifContainer[motifID];
-		threshold[i] = m.getThreshold();
-	}
-
-	cublasSetVector(R.nRows(), sizeof(float), threshold, 1, d_threshold, 1);
-
-	// set the number of occurrences
         int nOcc = 0;
+        if (cudaMalloc((void **)&d_nOcc, sizeof(int)) != cudaSuccess)
+                throw runtime_error("Cannot allocate memory on CUDA device\n");
         cublasSetVector(1, sizeof(int), &nOcc, 1, d_nOcc, 1);
 
-	map<int, int> offset_v;
-
+        map<int, int> offset_v;
         while (sm.getNextSeqMatrix(seqBatch)) {
 		cublasSetVector(4 * (K + overlap) * W, sizeof(float), sm.S.data, 1, d_S, 1);
 
@@ -380,17 +355,18 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
                 cout << "."; cout.flush();
         }
 
-	delete [] threshold;
+        delete [] occIdx;
+        delete [] occScore;
 
-	cudaFree(d_P);
-	cudaFree(d_S);
-	cudaFree(d_R);
-	cudaFree(d_threshold);
-	cudaFree(d_occScore);
-	cudaFree(d_occIdx);
-	cudaFree(d_nOcc);
+        cudaFree(d_P);
+        cudaFree(d_S);
+        cudaFree(d_R);
+        cudaFree(d_threshold);
+        cudaFree(d_occScore);
+        cudaFree(d_occIdx);
+        cudaFree(d_nOcc);
 
-	cublasDestroy(handle);
+        cublasDestroy(handle);
 }
 
 void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContainer,
@@ -404,8 +380,9 @@ void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContain
                 return;
         }
 
-	if (numThreads < numDevices)
-		numDevices = numThreads;
+        // limit the number of devices to the number of threads specified
+        if (numThreads < numDevices)
+                numDevices = numThreads;
 
         cout << "Using " << numDevices << " GPU devices" << endl;
 
