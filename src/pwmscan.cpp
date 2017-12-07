@@ -97,7 +97,7 @@ void PWMScan::extractOccurrences(const Matrix<float>& R, size_t offset,
 
                         char strand = m.isRevCompl() ? '-' : '+';
 
-                        motifOcc.push_back(MotifOccurrence(m.getID(), seqPos.getSeqIndex(),
+                        motifOcc.push_back(MotifOccurrence(m.getID(), 0, seqPos.getSeqIndex(),
                                                            seqPos.getSeqPos(), strand, thisScore));
                 }
         }
@@ -128,10 +128,56 @@ void extractOccurrences2(int m, const map<int, int>& offset_v, int *occIdx, floa
 
 			char strand = m.isRevCompl() ? '-' : '+';
 
-        	        motifOcc.push_back(MotifOccurrence(m.getID(), seqPos.getSeqIndex(),
+        	        motifOcc.push_back(MotifOccurrence(m.getID(), 0, seqPos.getSeqIndex(),
                                            seqPos.getSeqPos(), strand, thisScore));
 		}
 	}
+}
+
+void PWMScan::scanThreadNaive(size_t speciesID, const MotifContainer& motifContainer,
+                              FastaBatch& seqBatch, std::ostream& os)
+{
+        vector<MotifOccurrence> occurrences;
+
+        string line; SeqPos seqPos;
+        while (seqBatch.getNextFilteredLine(line, seqPos)) {
+                for (size_t i = 0; i < line.size(); i++) {
+                        for (size_t j = 0; j < motifContainer.size(); j++) {
+                                const Motif& m = motifContainer[j];
+                                if (m.size() > (line.size() - i))
+                                        continue;
+                                float thisScore = m.getScore(line.substr(i, m.size()));
+                                if (thisScore < m.getThreshold())
+                                        continue;
+
+                                char strand = m.isRevCompl() ? '-' : '+';
+
+                                occurrences.push_back(MotifOccurrence(m.getID(), 0, seqPos.getSeqIndex(),
+                                                                      seqPos.getSeqPos() + i, strand, thisScore));
+                        }
+                }
+
+                commitOccurrences(occurrences);
+                occurrences.clear();
+        }
+}
+
+void PWMScan::scanPWMNaive(size_t speciesID, const MotifContainer& motifContainer,
+                            FastaBatch& seqBatch, std::ostream& os)
+{
+        cout << "Using " << numThreads << " threads" << endl;
+
+        // start histogram threads
+        vector<thread> workerThreads(numThreads);
+        for (size_t i = 0; i < workerThreads.size(); i++)
+                workerThreads[i] = thread(&PWMScan::scanThreadNaive, this, speciesID,
+                                          cref(motifContainer),
+                                          ref(seqBatch), ref(os));
+
+        // wait for worker threads to finish
+        for_each(workerThreads.begin(), workerThreads.end(), mem_fn(&thread::join));
+
+        cout << endl;
 }
 
 void PWMScan::scanThreadBLAS(size_t speciesID, const MotifContainer& motifContainer,
@@ -162,58 +208,20 @@ void PWMScan::scanThreadBLAS(size_t speciesID, const MotifContainer& motifContai
                 }
 
                 // write the occurrences to disk
-                lock_guard<mutex> lock(myMutex);
-                for (auto o : occurrences)
-                        os << o.getMotifID() << "\t" << speciesID << "\t"
-                           << o.getSequenceID() << "\t" << o.getSequencePos()
-                           << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";
-
-                totMatches += occurrences.size();
+                commitOccurrences(occurrences);
                 occurrences.clear();
 
                 cout << "."; cout.flush();
         }
 }
 
-void PWMScan::scanThreadNaive(size_t speciesID, const MotifContainer& motifContainer,
-                               FastaBatch& seqBatch, std::ostream& os)
-{
-        vector<MotifOccurrence> occurrences;
-
-        string line; SeqPos seqPos;
-        while (seqBatch.getNextFilteredLine(line, seqPos)) {
-                for (size_t i = 0; i < line.size(); i++) {
-                        for (size_t j = 0; j < motifContainer.size(); j++) {
-                                const Motif& m = motifContainer[j];
-                                if (m.size() > (line.size() - i))
-                                        continue;
-                                float thisScore = m.getScore(line.substr(i, m.size()));
-                                if (thisScore < m.getThreshold())
-                                        continue;
-
-                                char strand = m.isRevCompl() ? '-' : '+';
-
-                                occurrences.push_back(MotifOccurrence(m.getID(), seqPos.getSeqIndex(),
-                                                                      seqPos.getSeqPos() + i, strand, thisScore));
-                        }
-                }
-
-                // write the occurrences to disk
-                lock_guard<mutex> lock(myMutex);
-                for (auto o : occurrences)
-                        os << o.getMotifID() << "\t" << speciesID << "\t"
-                           << o.getSequenceID() << "\t" << o.getSequencePos()
-                           << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";
-
-                totMatches += occurrences.size();
-                occurrences.clear();
-        }
-}
-
-
 void PWMScan::scanPWMBLAS(size_t speciesID, const MotifContainer& motifContainer,
-                      FastaBatch& seqBatch, std::ostream& os)
+                          FastaBatch& seqBatch, std::ostream& os)
 {
+        // start the output thread
+        string filename("Occurrences.txt");
+        thread ot(&PWMScan::outputThread, this, cref(filename));
+
         cout << "Using " << numThreads << " threads" << endl;
 
         // start histogram threads
@@ -226,23 +234,14 @@ void PWMScan::scanPWMBLAS(size_t speciesID, const MotifContainer& motifContainer
         // wait for worker threads to finish
         for_each(workerThreads.begin(), workerThreads.end(), mem_fn(&thread::join));
 
-        cout << endl;
-}
+        // wait for the output thread to finish
+        cout << "Right before joint ... " << endl;
+        myMutex.lock();
+        active = false;
+        myMutex.unlock();
+        cvFull.notify_one();
 
-void PWMScan::scanPWMNaive(size_t speciesID, const MotifContainer& motifContainer,
-                            FastaBatch& seqBatch, std::ostream& os)
-{
-        cout << "Using " << numThreads << " threads" << endl;
-
-        // start histogram threads
-        vector<thread> workerThreads(numThreads);
-        for (size_t i = 0; i < workerThreads.size(); i++)
-                workerThreads[i] = thread(&PWMScan::scanThreadNaive, this, speciesID,
-                                          cref(motifContainer),
-                                          ref(seqBatch), ref(os));
-
-        // wait for worker threads to finish
-        for_each(workerThreads.begin(), workerThreads.end(), mem_fn(&thread::join));
+        ot.join();
 
         cout << endl;
 }
@@ -342,14 +341,7 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
                 nOcc = 0;
                 cublasSetVector(1, sizeof(int), &nOcc, 1, d_nOcc, 1);
 
-                // write the occurrences to disk
-                lock_guard<mutex> lock(myMutex);
-                for (auto o : occurrences)
-                        os << o.getMotifID() << "\t" << speciesID << "\t"
-                           << o.getSequenceID() << "\t" << o.getSequencePos()
-                           << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";
-
-                totMatches += occurrences.size();
+                commitOccurrences(occurrences);
                 occurrences.clear();
 
                 cout << "."; cout.flush();
@@ -399,6 +391,49 @@ void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContain
         cout << endl;
 }
 #endif
+
+void PWMScan::commitOccurrences(const std::vector<MotifOccurrence>& chunk)
+{
+        unique_lock<mutex> lock(myMutex);
+        cvEmpty.wait(lock, [this]{return buffer.empty();});
+
+        buffer.insert(buffer.end(), chunk.begin(), chunk.end());
+
+        cvFull.notify_one();
+}
+
+void PWMScan::outputThread(const std::string& filename)
+{
+        ofstream ofs;
+        if (!filename.empty())
+                ofs.open(filename.c_str());
+        ostream& os = (filename.empty()) ? cout : ofs;
+
+        unique_lock<mutex> lock(myMutex);
+        active = true;
+
+        while (true) {
+                cvFull.wait(lock, [this]{return !active || !buffer.empty();});
+
+                totMatches += buffer.size();
+                for (auto o : buffer)
+                        os << o.getMotifID() << "\t" << o.getSpeciesID() << "\t"
+                           << o.getSequenceID() << "\t" << o.getSequencePos()
+                           << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";
+
+                buffer.clear();
+
+                if (!active)
+                        break;
+
+                cvEmpty.notify_one();   // notify a single worker thread that
+                                        // it is OK to push work onto the buffer
+        }
+
+        if (!filename.empty())
+                ofs.close();
+}
+
 
 PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
         outputFilename("occurrences.txt"),

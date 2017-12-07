@@ -67,6 +67,13 @@ private:
         std::mutex myMutex;
         size_t totMatches;
 
+        std::condition_variable cvEmpty;        // condition variable to signal buffer is empty
+        std::condition_variable cvFull;         // condition variable to signal buffer is full
+
+        bool active;                    // flag (thread is active or not)
+
+        std::vector<MotifOccurrence> buffer;
+
         /**
          * Print module instructions
          */
@@ -145,6 +152,17 @@ private:
         void scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContainer,
                            FastaBatch& seqBatch, std::ostream& os);
 #endif
+        /**
+         * Commit some occurrences onto the output thread
+         * @param chunk A number of occurrences
+         */
+        void commitOccurrences(const std::vector<MotifOccurrence>& chunk);
+
+        /**
+         * Entry point for the output thread
+         * @param filename File name of the output file
+         */
+        void outputThread(const std::string& filename);
 
 public:
         /**
