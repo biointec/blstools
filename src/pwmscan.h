@@ -97,38 +97,34 @@ private:
          * @param speciesID Species identifier
          * @param motifContainer Motif MotifContainer
          * @param seqBatch Fasta sequence batch
-         * @param os Output stream to write hits to
          */
         void scanThreadBLAS(size_t speciesID, const MotifContainer& motifContainer,
-                        FastaBatch& seqBatch, std::ostream& os);
+                        FastaBatch& seqBatch);
 
         /**
          * Thread function that does the actual scanning (naive algorithm)
          * @param speciesID Species identifier
          * @param motifContainer Motif MotifContainer
          * @param seqBatch Fasta sequence batch
-         * @param os Output stream to write hits to
          */
         void scanThreadNaive(size_t speciesID, const MotifContainer& motifContainer,
-                             FastaBatch& seqBatch, std::ostream& os);
+                             FastaBatch& seqBatch);
 
         /**
          * Scan sequences for PWM occurrences using BLAS
          * @param motifContainer Motif MotifContainer
          * @param seqBatch Fasta sequence batch
-         * @param os Output stream to write hits to
          */
         void scanPWMBLAS(size_t speciesID, const MotifContainer& motifContainer,
-                         FastaBatch& seqBatch, std::ostream& os);
+                         FastaBatch& seqBatch);
 
         /**
          * Scan sequences for PWM occurrences using the naive algorithm
          * @param motifContainer Motif MotifContainer
          * @param seqBatch Fasta sequence batch
-         * @param os Output stream to write hits to
          */
         void scanPWMNaive(size_t speciesID, const MotifContainer& motifContainer,
-                          FastaBatch& seqBatch, std::ostream& os);
+                          FastaBatch& seqBatch);
 
 #ifdef HAVE_CUDA
         /**
@@ -137,20 +133,18 @@ private:
          * @param speciesID Species identifier
          * @param motifContainer Motif MotifContainer
          * @param seqBatch Fasta sequence batch
-         * @param os Output stream to write hits to
          */
         void scanThreadCUBLAS(int devID, size_t speciesID,
                               const MotifContainer& motifContainer,
-                              FastaBatch& seqBatch, std::ostream& os);
+                              FastaBatch& seqBatch);
 
         /**
          * Scan sequences for PWM occurrences using CUBLAS
          * @param motifContainer Motif MotifContainer
          * @param seqBatch Fasta sequence batch
-         * @param os Output stream to write hits to
          */
         void scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContainer,
-                           FastaBatch& seqBatch, std::ostream& os);
+                           FastaBatch& seqBatch);
 #endif
         /**
          * Commit some occurrences onto the output thread
