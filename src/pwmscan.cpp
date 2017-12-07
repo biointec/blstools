@@ -371,7 +371,7 @@ void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContain
         for (size_t i = 0; i < workerThreads.size(); i++)
                 workerThreads[i] = thread(&PWMScan::scanThreadCUBLAS, this, i, speciesID,
                                           cref(motifContainer),
-                                          ref(seqBatch), ref(os));
+                                          ref(seqBatch));
 
         // wait for worker threads to finish
         for_each(workerThreads.begin(), workerThreads.end(), mem_fn(&thread::join));
