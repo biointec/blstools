@@ -76,16 +76,29 @@ void PWMScan::printUsage() const
         cout << "Report bugs to Jan Fostier <jan.fostier@ugent.be>\n";
 }
 
-void writeToDisk(size_t speciesID, const vector<MotifOccurrence> occurrences, mutex& m, std::ostream& os)
+void PWMScan::writeOccToDisk(size_t speciesID,
+                             const std::vector<MotifOccurrence>& occurrences)
 {
-	ostringstream oss;
-        for (auto o : occurrences)
-        	oss << o.getMotifID() << "\t" << speciesID << "\t"
+        // produce a string outside the mutex
+        ostringstream oss;
+        for (auto o : occurrences) {
+                oss << o.getMotifID() << "\t" << speciesID << "\t"
                     << o.getSequenceID() << "\t" << o.getSequencePos()
                     << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";
 
-        // write the occurrences to disk
-        lock_guard<mutex> lock(m);
+                // KLAAS' FORMAT
+                /*oss << sc[o.getSpeciesID()].getSeqName(o.getSequenceID()) << "\t"
+                    << "blstools\t"
+                    << mc[o.getMotifID()].getName() << "\t"
+                    << o.getSequencePos() << "\t"
+                    << o.getSequencePos() + mc[o.getMotifID()].size() << "\t"
+                    << o.getScore() << "\t"
+                    << o.getStrand() << "\t.\t.\n";*/
+        }
+
+        // dump the string to disk under mutex protection
+        lock_guard<mutex> lock(myMutex);
+        totMatches += occurrences.size();
         os << oss.str();
 }
 
@@ -172,7 +185,7 @@ void PWMScan::scanThreadNaive(size_t speciesID, const MotifContainer& motifConta
                         }
                 }
 
-                commitOccurrences(occurrences);
+                writeOccToDisk(speciesID, occurrences);
                 occurrences.clear();
         }
 }
@@ -223,8 +236,7 @@ void PWMScan::scanThreadBLAS(size_t speciesID, const MotifContainer& motifContai
                 }
 
                 // write the occurrences to disk
-                //commitOccurrences(occurrences);
-                writeToDisk(speciesID, occurrences, myMutex, os);
+                writeOccToDisk(speciesID, occurrences);
                 occurrences.clear();
 
                 cout << "."; cout.flush();
@@ -361,10 +373,8 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
 		// write the output to disk
 		if (outputTask[currOutputTask].valid())
 			outputTask[currOutputTask].get();
-		outputTask[currOutputTask] = async(launch::async, writeToDisk, speciesID, occurrences, ref(myMutex), ref(os));
+		outputTask[currOutputTask] = async(launch::async, &PWMScan::writeToDisk, this, speciesID, cref(occurrences));
 		currOutputTask = (currOutputTask + 1) % nOutputTasks;
-
-                totMatches += occurrences.size();
 
                 occurrences.clear();
 
@@ -420,61 +430,6 @@ void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContain
         cout << endl;
 }
 #endif
-
-void PWMScan::commitOccurrences(const std::vector<MotifOccurrence>& chunk)
-{
-        unique_lock<mutex> lock(myMutex);
-        cvEmpty.wait(lock, [this]{return buffer.empty();});
-
-        buffer.insert(buffer.end(), chunk.begin(), chunk.end());
-
-        cvFull.notify_one();
-}
-
-void PWMScan::outputThread(const std::string& filename,
-                           const SpeciesContainer& sc,
-                           const MotifContainer& mc)
-{
-        os.open(filename.c_str());
-
-        /*ofstream ofs;
-        if (!filename.empty())
-                ofs.open(filename.c_str());
-        os = (filename.empty()) ? cout : ofs;
-
-        unique_lock<mutex> lock(myMutex);
-        active = true;
-
-        while (true) {
-                cvFull.wait(lock, [this]{return !active || !buffer.empty();});
-
-                totMatches += buffer.size();
-                for (auto o : buffer)
-                        os << sc[o.getSpeciesID()].getSeqName(o.getSequenceID()) << "\t"
-                           << "blstools\t"
-                           << mc[o.getMotifID()].getName() << "\t"
-                           << o.getSequencePos() << "\t"
-                           << o.getSequencePos() + mc[o.getMotifID()].size() << "\t"
-                           << o.getScore() << "\t"
-                           << o.getStrand() << "\t.\t.\n";*/
-
-                        /*os << o.getMotifID() << "\t" << o.getSpeciesID() << "\t"
-                           << o.getSequenceID() << "\t" << o.getSequencePos()
-                           << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";*/
-
-              /*  buffer.clear();
-
-                if (!active)
-                        break;
-
-                cvEmpty.notify_one();   // notify a single worker thread that
-                                        // it is OK to push work onto the buffer
-        }
-
-        if (!filename.empty())
-                ofs.close();*/
-}
-
 
 PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
         outputFilename("occurrences.txt"),
@@ -577,9 +532,7 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
         ofstream ofsCutoff("motifCutoff.txt");
 
         // start the output thread
-        string filename(outputFilename.c_str());
-        thread ot(&PWMScan::outputThread, this, cref(filename),
-                  cref(speciesContainer), cref(motifContainer));
+        os.open(outputFilename.c_str());
 
         size_t speciesID = 0;
         for (auto species : speciesContainer) {
@@ -637,14 +590,8 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
                 }
         }
 
-        // wait for the output thread to finish
-        cout << "Right before joint ... " << endl;
-        myMutex.lock();
-        active = false;
-        myMutex.unlock();
-        cvFull.notify_one();
-
-        ot.join();
+        // close the output file
+        os.close();
 
         ofsCutoff.close();
 

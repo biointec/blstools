@@ -74,17 +74,20 @@ private:
         std::ofstream os;
         size_t totMatches;
 
-        std::condition_variable cvEmpty;        // condition variable to signal buffer is empty
-        std::condition_variable cvFull;         // condition variable to signal buffer is full
-
-        bool active;                    // flag (thread is active or not)
-
         std::vector<MotifOccurrence> buffer;
 
         /**
          * Print module instructions
          */
         void printUsage() const;
+
+        /**
+         * Write the occurrences to disk
+         * @param speciesID Species identifier
+         * @param occurrences Occurrences to write
+         */
+        void writeOccToDisk(size_t speciesID,
+                            const std::vector<MotifOccurrence>& occurrences);
 
         /**
          * Given a result matrix, extract the PWM occurrences
@@ -153,20 +156,7 @@ private:
         void scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContainer,
                            FastaBatch& seqBatch);
 #endif
-        /**
-         * Commit some occurrences onto the output thread
-         * @param chunk A number of occurrences
-         */
-        void commitOccurrences(const std::vector<MotifOccurrence>& chunk);
 
-        /**
-         * Entry point for the output thread
-         * @param filename File name of the output file
-         * @param sc Species container
-         */
-        void outputThread(const std::string& filename,
-                          const SpeciesContainer& sc,
-                          const MotifContainer& mc);
 
 public:
         /**
