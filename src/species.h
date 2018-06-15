@@ -163,6 +163,14 @@ public:
         }
 
         /**
+         * Operator [] overloading
+         * @return A const-ref to the species
+         */
+        const Species& operator[](size_t speciesID) const {
+                return speciesContainer[speciesID];
+        }
+
+        /**
          * Get a species by name
          * @return A const-ref to the species
          */

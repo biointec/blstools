@@ -29,6 +29,12 @@
 #include "sequence.h"
 
 // ============================================================================
+// CLASS PROTOTYPES
+// ============================================================================
+
+class SpeciesContainer;
+
+// ============================================================================
 // PWMSCAN
 // ============================================================================
 
@@ -155,8 +161,11 @@ private:
         /**
          * Entry point for the output thread
          * @param filename File name of the output file
+         * @param sc Species container
          */
-        void outputThread(const std::string& filename);
+        void outputThread(const std::string& filename,
+                          const SpeciesContainer& sc,
+                          const MotifContainer& mc);
 
 public:
         /**
