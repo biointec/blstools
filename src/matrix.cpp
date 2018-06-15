@@ -88,7 +88,7 @@ void Matrix<deci>::gemm(const Matrix& A, const SubMatrix<deci>& B,
                 int k = matBlocksA[i].second;
 
                 gemm_f77("N", "N", &m, &n, &k, &one, A.data + start, &LDA,
-                         B.getDataPtr(), &LDB, &zero, data + start, &LDC);
+                         B.getDataPtr(), &LDB, &one, data + start, &LDC);
         }
 }
 
