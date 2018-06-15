@@ -468,8 +468,8 @@ size_t MotifContainer::getMaxMotifLen() const
 
 ostream& operator<< (ostream& os, const MotifOccurrence& m)
 {
-        os << m.getMotifID() << "\t" << m.getSequenceID() << "\t"
-           << m.getSequencePos() << "\t"  << m.getStrand()
-           << "\t" << m.getScore();
+        os << m.getMotifID() << "\t" << m.getSpeciesID() << "\t"
+           << m.getSequenceID() << "\t" << m.getSequencePos() << "\t"
+           << m.getStrand() << "\t" << m.getScore();
         return os;
 }

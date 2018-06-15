@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.6)
+cmake_minimum_required(VERSION 2.8)
 project(blstools)
 
 # project version
@@ -27,7 +27,7 @@ add_definitions("-DBLSTOOLS_PATCH_LEVEL=${${PROJECT_NAME}_PATCH_LEVEL}")
 include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
 if(COMPILER_SUPPORTS_CXX11)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 else()
         message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a more recent C++ compiler.")
 endif()
@@ -41,9 +41,26 @@ add_definitions(-DHAVE_CONFIG_H)
 
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/src")
 
-add_executable(blstools src/dict.cpp src/hist.cpp src/blstools.cpp src/bls.cpp
-        src/phylotree.cpp src/matrix.cpp src/pwmscan.cpp src/motif.cpp
-        src/sequence.cpp  src/ortho.cpp src/species.cpp)
-target_link_libraries(blstools ${BLAS_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+find_package(CUDA)
+if (CUDA_FOUND)
+        # Do not propagate the -std=c++11 flag to nvcc
+        set(CUDA_PROPAGATE_HOST_FLAGS "OFF")
 
-install(TARGETS blstools RUNTIME DESTINATION bin)
+        add_definitions(-DHAVE_CUDA)
+
+        include_directories(${CUDA_INCLUDE_DIRS})
+
+        cuda_add_executable(blstools src/dict.cpp src/hist.cpp src/blstools.cpp
+                src/bls.cpp src/phylotree.cpp src/matrix.cpp src/pwmscan.cpp
+                src/motif.cpp src/sequence.cpp  src/ortho.cpp src/species.cpp
+                src/kernel.cu)
+        target_link_libraries(blstools ${BLAS_LIBRARIES} ${CUDA_LIBRARIES}
+		${CUDA_CUBLAS_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+        install(TARGETS blstools RUNTIME DESTINATION bin)
+else()  # No CUDA support
+	add_executable(blstools src/dict.cpp src/hist.cpp src/blstools.cpp src/bls.cpp
+        	src/phylotree.cpp src/matrix.cpp src/pwmscan.cpp src/motif.cpp
+	        src/sequence.cpp  src/ortho.cpp src/species.cpp)
+	target_link_libraries(blstools ${BLAS_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+	install(TARGETS blstools RUNTIME DESTINATION bin)
+endif()

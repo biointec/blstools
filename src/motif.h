@@ -24,6 +24,8 @@
 #include <vector>
 #include <array>
 #include <atomic>
+#include <mutex>
+#include <condition_variable>
 
 #include "matrix.h"
 
@@ -443,8 +445,9 @@ public:
 
 class MotifOccurrence {
 private:
-        size_t motifID;
-        size_t sequenceID;
+        unsigned int motifID;
+        unsigned int speciesID;
+        unsigned int sequenceID;
         size_t sequencePos;
         char strand;
         float score;
@@ -458,29 +461,39 @@ public:
         /**
          * Constructor with arguments
          * @param motifID The motif identifier
+         * @param speciesID The species identifier
          * @param sequenceID The sequence identifier
          * @param sequencePos The sequence position identifier
          * @param strand + or - strand
          * @param score The motif score
          */
-        MotifOccurrence(size_t motifID, size_t sequenceID, size_t sequencePos,
+        MotifOccurrence(unsigned int motifID, unsigned int speciesID,
+                        unsigned int sequenceID, size_t sequencePos,
                         char strand, float score) :
-                motifID(motifID), sequenceID(sequenceID),
+                motifID(motifID), speciesID(speciesID), sequenceID(sequenceID),
                 sequencePos(sequencePos), strand(strand), score(score) {}
 
         /**
          * Get the motif identifier
          * @return The motif identifier
          */
-        size_t getMotifID() const {
+        unsigned int getMotifID() const {
                 return motifID;
+        }
+
+        /**
+         * Get the species identifier
+         * @return The species identifier
+         */
+        unsigned int getSpeciesID() const {
+                return speciesID;
         }
 
         /**
          * Get the sequence identifier
          * @return The sequence identifier
          */
-        size_t getSequenceID() const {
+        unsigned int getSequenceID() const {
                 return sequenceID;
         }
 

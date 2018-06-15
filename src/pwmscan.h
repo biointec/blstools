@@ -36,6 +36,7 @@ class PWMScan
 {
 private:
         bool simpleMode;
+	bool cudaMode;
 
         std::string outputFilename;
 
@@ -66,6 +67,13 @@ private:
         std::mutex myMutex;
         size_t totMatches;
 
+        std::condition_variable cvEmpty;        // condition variable to signal buffer is empty
+        std::condition_variable cvFull;         // condition variable to signal buffer is full
+
+        bool active;                    // flag (thread is active or not)
+
+        std::vector<MotifOccurrence> buffer;
+
         /**
          * Print module instructions
          */
@@ -85,42 +93,70 @@ private:
                                 std::vector<MotifOccurrence>& motifOcc);
 
         /**
-         * Thread function that does the actual scanning
+         * Thread function that does the actual scanning (BLAS algorithm)
          * @param speciesID Species identifier
          * @param motifContainer Motif MotifContainer
          * @param seqBatch Fasta sequence batch
-         * @param os Output stream to write hits to
          */
-        void scanThread(size_t speciesID, const MotifContainer& motifContainer,
-                        FastaBatch& seqBatch, std::ostream& os);
+        void scanThreadBLAS(size_t speciesID, const MotifContainer& motifContainer,
+                        FastaBatch& seqBatch);
 
         /**
-         * Thread function that does the actual scanning (simple algorithm)
+         * Thread function that does the actual scanning (naive algorithm)
          * @param speciesID Species identifier
          * @param motifContainer Motif MotifContainer
          * @param seqBatch Fasta sequence batch
-         * @param os Output stream to write hits to
          */
-        void scanThreadSimple(size_t speciesID, const MotifContainer& motifContainer,
-                              FastaBatch& seqBatch, std::ostream& os);
+        void scanThreadNaive(size_t speciesID, const MotifContainer& motifContainer,
+                             FastaBatch& seqBatch);
 
         /**
-         * Scan sequences for PWM occurrences
+         * Scan sequences for PWM occurrences using BLAS
          * @param motifContainer Motif MotifContainer
          * @param seqBatch Fasta sequence batch
-         * @param os Output stream to write hits to
          */
-        void scanPWM(size_t speciesID, const MotifContainer& motifContainer,
-                     FastaBatch& seqBatch, std::ostream& os);
+        void scanPWMBLAS(size_t speciesID, const MotifContainer& motifContainer,
+                         FastaBatch& seqBatch);
 
         /**
-         * Scan sequences for PWM occurrences
+         * Scan sequences for PWM occurrences using the naive algorithm
          * @param motifContainer Motif MotifContainer
          * @param seqBatch Fasta sequence batch
-         * @param os Output stream to write hits to
          */
-        void scanPWMSimple(size_t speciesID, const MotifContainer& motifContainer,
-                           FastaBatch& seqBatch, std::ostream& os);
+        void scanPWMNaive(size_t speciesID, const MotifContainer& motifContainer,
+                          FastaBatch& seqBatch);
+
+#ifdef HAVE_CUDA
+        /**
+         * Thread function that does the actual scanning (CUBLAS algorithm)
+         * @param devID Device ID
+         * @param speciesID Species identifier
+         * @param motifContainer Motif MotifContainer
+         * @param seqBatch Fasta sequence batch
+         */
+        void scanThreadCUBLAS(int devID, size_t speciesID,
+                              const MotifContainer& motifContainer,
+                              FastaBatch& seqBatch);
+
+        /**
+         * Scan sequences for PWM occurrences using CUBLAS
+         * @param motifContainer Motif MotifContainer
+         * @param seqBatch Fasta sequence batch
+         */
+        void scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContainer,
+                           FastaBatch& seqBatch);
+#endif
+        /**
+         * Commit some occurrences onto the output thread
+         * @param chunk A number of occurrences
+         */
+        void commitOccurrences(const std::vector<MotifOccurrence>& chunk);
+
+        /**
+         * Entry point for the output thread
+         * @param filename File name of the output file
+         */
+        void outputThread(const std::string& filename);
 
 public:
         /**

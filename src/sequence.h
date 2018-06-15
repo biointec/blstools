@@ -313,7 +313,8 @@ public:
 
 class SeqMatrix {
 
-private:
+public:
+//private:
         // matrix dimensions = 4(K + overlap) x numCol
         size_t K;                       // number of sequence rows
         size_t overlap;                 // number of overlap rows
