@@ -76,6 +76,19 @@ void PWMScan::printUsage() const
         cout << "Report bugs to Jan Fostier <jan.fostier@ugent.be>\n";
 }
 
+void writeToDisk(size_t speciesID, const vector<MotifOccurrence> occurrences, mutex& m, std::ostream& os)
+{
+	ostringstream oss;
+        for (auto o : occurrences)
+        	oss << o.getMotifID() << "\t" << speciesID << "\t"
+                    << o.getSequenceID() << "\t" << o.getSequencePos()
+                    << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";
+
+        // write the occurrences to disk
+        lock_guard<mutex> lock(m);
+        os << oss.str();
+}
+
 void PWMScan::extractOccurrences(const Matrix<float>& R, size_t offset,
                                  SeqMatrix& sm,
                                  const MotifContainer& motifContainer,
@@ -210,7 +223,8 @@ void PWMScan::scanThreadBLAS(size_t speciesID, const MotifContainer& motifContai
                 }
 
                 // write the occurrences to disk
-                commitOccurrences(occurrences);
+                //commitOccurrences(occurrences);
+                writeToDisk(speciesID, occurrences, myMutex, os);
                 occurrences.clear();
 
                 cout << "."; cout.flush();
@@ -233,19 +247,6 @@ void PWMScan::scanPWMBLAS(size_t speciesID, const MotifContainer& motifContainer
         for_each(workerThreads.begin(), workerThreads.end(), mem_fn(&thread::join));
 
         cout << endl;
-}
-
-void writeToDisk(size_t speciesID, const vector<MotifOccurrence> occurrences, mutex& m, std::ostream& os)
-{
-	ostringstream oss;
-        for (auto o : occurrences)
-        	oss << o.getMotifID() << "\t" << speciesID << "\t"
-                    << o.getSequenceID() << "\t" << o.getSequencePos()
-                    << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";
-
-        // write the occurrences to disk
-        lock_guard<mutex> lock(m);
-        os << oss.str();
 }
 
 #ifdef HAVE_CUDA
@@ -434,10 +435,12 @@ void PWMScan::outputThread(const std::string& filename,
                            const SpeciesContainer& sc,
                            const MotifContainer& mc)
 {
-        ofstream ofs;
+        os.open(filename.c_str());
+
+        /*ofstream ofs;
         if (!filename.empty())
                 ofs.open(filename.c_str());
-        ostream& os = (filename.empty()) ? cout : ofs;
+        os = (filename.empty()) ? cout : ofs;
 
         unique_lock<mutex> lock(myMutex);
         active = true;
@@ -453,13 +456,13 @@ void PWMScan::outputThread(const std::string& filename,
                            << o.getSequencePos() << "\t"
                            << o.getSequencePos() + mc[o.getMotifID()].size() << "\t"
                            << o.getScore() << "\t"
-                           << o.getStrand() << "\t.\t.\n";
+                           << o.getStrand() << "\t.\t.\n";*/
 
                         /*os << o.getMotifID() << "\t" << o.getSpeciesID() << "\t"
                            << o.getSequenceID() << "\t" << o.getSequencePos()
                            << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";*/
 
-                buffer.clear();
+              /*  buffer.clear();
 
                 if (!active)
                         break;
@@ -469,7 +472,7 @@ void PWMScan::outputThread(const std::string& filename,
         }
 
         if (!filename.empty())
-                ofs.close();
+                ofs.close();*/
 }
 
 

@@ -71,6 +71,7 @@ private:
         size_t K;               // choose freely
 
         std::mutex myMutex;
+        std::ofstream os;
         size_t totMatches;
 
         std::condition_variable cvEmpty;        // condition variable to signal buffer is empty
