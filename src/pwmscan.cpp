@@ -23,6 +23,8 @@
 #include <iomanip>
 #include <thread>
 #include <algorithm>
+#include <sstream>
+#include <future>
 
 #include "pwmscan.h"
 #include "sequence.h"
@@ -233,6 +235,19 @@ void PWMScan::scanPWMBLAS(size_t speciesID, const MotifContainer& motifContainer
         cout << endl;
 }
 
+void writeToDisk(size_t speciesID, const vector<MotifOccurrence> occurrences, mutex& m, std::ostream& os)
+{
+	ostringstream oss;
+        for (auto o : occurrences)
+        	oss << o.getMotifID() << "\t" << speciesID << "\t"
+                    << o.getSequenceID() << "\t" << o.getSequencePos()
+                    << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";
+
+        // write the occurrences to disk
+        lock_guard<mutex> lock(m);
+        os << oss.str();
+}
+
 #ifdef HAVE_CUDA
 void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
                                const MotifContainer& motifContainer,
@@ -243,6 +258,7 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
 
         float *d_P = 0, *d_S = 0, *d_R = 0;
         float *d_threshold = 0, *d_occScore = 0;
+
         int *d_occIdx = 0, *d_nOcc = 0;
 
         size_t overlap = motifContainer.getMaxMotifLen() - 1;
@@ -300,40 +316,64 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
                 throw runtime_error("Cannot allocate memory on CUDA device\n");
         cublasSetVector(1, sizeof(int), &nOcc, 1, d_nOcc, 1);
 
+	const auto matBlock = motifContainer.getMatrixBlock();
+
         map<int, int> offset_v;
-        while (sm.getNextSeqMatrix(seqBatch)) {
+
+	size_t nOutputTasks = 10;	// FIXME: derive from available number of threads
+	vector<future<void> > outputTask(nOutputTasks);
+	size_t currOutputTask = 0;
+
+	while (sm.getNextSeqMatrix(seqBatch)) {
 		cublasSetVector(4 * (K + overlap) * W, sizeof(float), sm.S.data, 1, d_S, 1);
 
                 for (size_t offset = 0; offset < K; offset++) {
-			cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, R.nRows(), R.nCols(), P.nCols(), &alpha, d_P, P.nRows(), d_S + 4 * offset, sm.S.nRows(), &beta, d_R, R.nRows());
+
+		        for (size_t i = 0; i < matBlock.size(); i++) {
+		                size_t start = (i == 0) ? 0 : matBlock[i-1].first;
+                		size_t end = matBlock[i].first;
+
+		                int m = end-start;
+                		int k = matBlock[i].second;
+
+				cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, R.nCols(), P.nCols(), &alpha, d_P + start, P.nRows(), d_S + 4 * offset, sm.S.nRows(), &beta, d_R + start, R.nRows());
+			}
+			//cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, R.nRows(), R.nCols(), P.nCols(), &alpha, d_P, P.nRows(), d_S + 4 * offset, sm.S.nRows(), &beta, d_R, R.nRows());
 			kernel_wrapper(d_R, R.nRows(), R.nCols(), d_threshold, d_occIdx, d_occScore, d_nOcc);
 			int prevOcc = nOcc;
 			cublasGetVector(1, sizeof(int), d_nOcc, 1, &nOcc, 1);
 			offset_v[offset] = nOcc - prevOcc;
-			if (nOcc > R.nRows() * R.nCols()) {
-				cout << "Writing occurrences " << nOcc << endl;
-				cublasGetVector(nOcc, sizeof(float), d_occScore, 1, occScore, 1);
-				cublasGetVector(nOcc, sizeof(int), d_occIdx, 1, occIdx, 1);
-				extractOccurrences2(R.nRows(), offset_v, occIdx, occScore, sm, motifContainer, occurrences);
-				offset_v.clear();
-				nOcc = 0;
-				cublasSetVector(1, sizeof(int), &nOcc, 1, d_nOcc, 1);
-			}
+
+			// don't retreive vector just yet if insufficient results are on the GPU
+			if ( (nOcc <= R.nRows() * R.nCols()) && (offset < K-1) )
+				continue;
+
+			// get the results
+			cublasGetVector(nOcc, sizeof(float), d_occScore, 1, occScore, 1);
+			cublasGetVector(nOcc, sizeof(int), d_occIdx, 1, occIdx, 1);
+			extractOccurrences2(R.nRows(), offset_v, occIdx, occScore, sm, motifContainer, occurrences);
+			offset_v.clear();
+			nOcc = 0;
+			cublasSetVector(1, sizeof(int), &nOcc, 1, d_nOcc, 1);
                 }
 
-	        cublasGetVector(1, sizeof(int), d_nOcc, 1, &nOcc, 1);
-		cublasGetVector(nOcc, sizeof(float), d_occScore, 1, occScore, 1);
-                cublasGetVector(nOcc, sizeof(int), d_occIdx, 1, occIdx, 1);
-                extractOccurrences2(R.nRows(), offset_v, occIdx, occScore, sm, motifContainer, occurrences);
-		offset_v.clear();
-                nOcc = 0;
-                cublasSetVector(1, sizeof(int), &nOcc, 1, d_nOcc, 1);
+		// write the output to disk
+		if (outputTask[currOutputTask].valid())
+			outputTask[currOutputTask].get();
+		outputTask[currOutputTask] = async(launch::async, writeToDisk, speciesID, occurrences, ref(myMutex), ref(os));
+		currOutputTask = (currOutputTask + 1) % nOutputTasks;
 
-                commitOccurrences(occurrences);
+                totMatches += occurrences.size();
+
                 occurrences.clear();
 
                 cout << "."; cout.flush();
         }
+
+	// wait for all output to be written
+	for (size_t i = 0; i < outputTask.size(); i++)
+		if (outputTask[i].valid())
+			outputTask[i].get();
 
         delete [] occIdx;
         delete [] occScore;
