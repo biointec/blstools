@@ -99,7 +99,7 @@ void PWMScan::extractOccurrences(const Matrix<float>& R, size_t offset,
 
                         char strand = m.isRevCompl() ? '-' : '+';
 
-                        motifOcc.push_back(MotifOccurrence(m.getID(), seqPos.getSeqIndex(),
+                        motifOcc.push_back(MotifOccurrence(m.getID(), 0, seqPos.getSeqIndex(),
                                                            seqPos.getSeqPos(), strand, thisScore));
                 }
         }
@@ -130,14 +130,60 @@ void extractOccurrences2(int m, const map<int, int>& offset_v, int *occIdx, floa
 
 			char strand = m.isRevCompl() ? '-' : '+';
 
-        	        motifOcc.push_back(MotifOccurrence(m.getID(), seqPos.getSeqIndex(),
+        	        motifOcc.push_back(MotifOccurrence(m.getID(), 0, seqPos.getSeqIndex(),
                                            seqPos.getSeqPos(), strand, thisScore));
 		}
 	}
 }
 
+void PWMScan::scanThreadNaive(size_t speciesID, const MotifContainer& motifContainer,
+                              FastaBatch& seqBatch)
+{
+        vector<MotifOccurrence> occurrences;
+
+        string line; SeqPos seqPos;
+        while (seqBatch.getNextFilteredLine(line, seqPos)) {
+                for (size_t i = 0; i < line.size(); i++) {
+                        for (size_t j = 0; j < motifContainer.size(); j++) {
+                                const Motif& m = motifContainer[j];
+                                if (m.size() > (line.size() - i))
+                                        continue;
+                                float thisScore = m.getScore(line.substr(i, m.size()));
+                                if (thisScore < m.getThreshold())
+                                        continue;
+
+                                char strand = m.isRevCompl() ? '-' : '+';
+
+                                occurrences.push_back(MotifOccurrence(m.getID(), 0, seqPos.getSeqIndex(),
+                                                                      seqPos.getSeqPos() + i, strand, thisScore));
+                        }
+                }
+
+                commitOccurrences(occurrences);
+                occurrences.clear();
+        }
+}
+
+void PWMScan::scanPWMNaive(size_t speciesID, const MotifContainer& motifContainer,
+                            FastaBatch& seqBatch)
+{
+        cout << "Using " << numThreads << " threads" << endl;
+
+        // start histogram threads
+        vector<thread> workerThreads(numThreads);
+        for (size_t i = 0; i < workerThreads.size(); i++)
+                workerThreads[i] = thread(&PWMScan::scanThreadNaive, this, speciesID,
+                                          cref(motifContainer),
+                                          ref(seqBatch));
+
+        // wait for worker threads to finish
+        for_each(workerThreads.begin(), workerThreads.end(), mem_fn(&thread::join));
+
+        cout << endl;
+}
+
 void PWMScan::scanThreadBLAS(size_t speciesID, const MotifContainer& motifContainer,
-                         FastaBatch& seqBatch, ostream& os)
+                         FastaBatch& seqBatch)
 {
         size_t overlap = motifContainer.getMaxMotifLen() - 1;
         size_t K = 250;                 // choose freely
@@ -164,57 +210,15 @@ void PWMScan::scanThreadBLAS(size_t speciesID, const MotifContainer& motifContai
                 }
 
                 // write the occurrences to disk
-                lock_guard<mutex> lock(myMutex);
-                for (auto o : occurrences)
-                        os << o.getMotifID() << "\t" << speciesID << "\t"
-                           << o.getSequenceID() << "\t" << o.getSequencePos()
-                           << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";
-
-                totMatches += occurrences.size();
+                commitOccurrences(occurrences);
                 occurrences.clear();
 
                 cout << "."; cout.flush();
         }
 }
 
-void PWMScan::scanThreadNaive(size_t speciesID, const MotifContainer& motifContainer,
-                               FastaBatch& seqBatch, std::ostream& os)
-{
-        vector<MotifOccurrence> occurrences;
-
-        string line; SeqPos seqPos;
-        while (seqBatch.getNextFilteredLine(line, seqPos)) {
-                for (size_t i = 0; i < line.size(); i++) {
-                        for (size_t j = 0; j < motifContainer.size(); j++) {
-                                const Motif& m = motifContainer[j];
-                                if (m.size() > (line.size() - i))
-                                        continue;
-                                float thisScore = m.getScore(line.substr(i, m.size()));
-                                if (thisScore < m.getThreshold())
-                                        continue;
-
-                                char strand = m.isRevCompl() ? '-' : '+';
-
-                                occurrences.push_back(MotifOccurrence(m.getID(), seqPos.getSeqIndex(),
-                                                                      seqPos.getSeqPos() + i, strand, thisScore));
-                        }
-                }
-
-                // write the occurrences to disk
-                lock_guard<mutex> lock(myMutex);
-                for (auto o : occurrences)
-                        os << o.getMotifID() << "\t" << speciesID << "\t"
-                           << o.getSequenceID() << "\t" << o.getSequencePos()
-                           << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";
-
-                totMatches += occurrences.size();
-                occurrences.clear();
-        }
-}
-
-
 void PWMScan::scanPWMBLAS(size_t speciesID, const MotifContainer& motifContainer,
-                      FastaBatch& seqBatch, std::ostream& os)
+                          FastaBatch& seqBatch)
 {
         cout << "Using " << numThreads << " threads" << endl;
 
@@ -223,25 +227,7 @@ void PWMScan::scanPWMBLAS(size_t speciesID, const MotifContainer& motifContainer
         for (size_t i = 0; i < workerThreads.size(); i++)
                 workerThreads[i] = thread(&PWMScan::scanThreadBLAS, this, speciesID,
                                           cref(motifContainer),
-                                          ref(seqBatch), ref(os));
-
-        // wait for worker threads to finish
-        for_each(workerThreads.begin(), workerThreads.end(), mem_fn(&thread::join));
-
-        cout << endl;
-}
-
-void PWMScan::scanPWMNaive(size_t speciesID, const MotifContainer& motifContainer,
-                            FastaBatch& seqBatch, std::ostream& os)
-{
-        cout << "Using " << numThreads << " threads" << endl;
-
-        // start histogram threads
-        vector<thread> workerThreads(numThreads);
-        for (size_t i = 0; i < workerThreads.size(); i++)
-                workerThreads[i] = thread(&PWMScan::scanThreadNaive, this, speciesID,
-                                          cref(motifContainer),
-                                          ref(seqBatch), ref(os));
+                                          ref(seqBatch));
 
         // wait for worker threads to finish
         for_each(workerThreads.begin(), workerThreads.end(), mem_fn(&thread::join));
@@ -265,14 +251,15 @@ void writeToDisk(size_t speciesID, const vector<MotifOccurrence> occurrences, mu
 #ifdef HAVE_CUDA
 void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
                                const MotifContainer& motifContainer,
-                               FastaBatch& seqBatch, std::ostream& os)
+                               FastaBatch& seqBatch)
 {
         const float alpha = 1.0f;
         const float beta = 0.0f;
 
         float *d_P = 0, *d_S = 0, *d_R = 0;
         float *d_threshold = 0, *d_occScore = 0;
-	int *d_occIdx = 0, *d_nOcc = 0;
+
+        int *d_occIdx = 0, *d_nOcc = 0;
 
         size_t overlap = motifContainer.getMaxMotifLen() - 1;
         size_t K = 250;                 // choose freely
@@ -377,6 +364,7 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
 		currOutputTask = (currOutputTask + 1) % nOutputTasks;
 
                 totMatches += occurrences.size();
+
                 occurrences.clear();
 
                 cout << "."; cout.flush();
@@ -402,7 +390,7 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
 }
 
 void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContainer,
-                            FastaBatch& seqBatch, std::ostream& os)
+                            FastaBatch& seqBatch)
 {
         int numDevices;
         cudaGetDeviceCount(&numDevices);
@@ -423,7 +411,7 @@ void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContain
         for (size_t i = 0; i < workerThreads.size(); i++)
                 workerThreads[i] = thread(&PWMScan::scanThreadCUBLAS, this, i, speciesID,
                                           cref(motifContainer),
-                                          ref(seqBatch), ref(os));
+                                          ref(seqBatch));
 
         // wait for worker threads to finish
         for_each(workerThreads.begin(), workerThreads.end(), mem_fn(&thread::join));
@@ -431,6 +419,59 @@ void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContain
         cout << endl;
 }
 #endif
+
+void PWMScan::commitOccurrences(const std::vector<MotifOccurrence>& chunk)
+{
+        unique_lock<mutex> lock(myMutex);
+        cvEmpty.wait(lock, [this]{return buffer.empty();});
+
+        buffer.insert(buffer.end(), chunk.begin(), chunk.end());
+
+        cvFull.notify_one();
+}
+
+void PWMScan::outputThread(const std::string& filename,
+                           const SpeciesContainer& sc,
+                           const MotifContainer& mc)
+{
+        ofstream ofs;
+        if (!filename.empty())
+                ofs.open(filename.c_str());
+        ostream& os = (filename.empty()) ? cout : ofs;
+
+        unique_lock<mutex> lock(myMutex);
+        active = true;
+
+        while (true) {
+                cvFull.wait(lock, [this]{return !active || !buffer.empty();});
+
+                totMatches += buffer.size();
+                for (auto o : buffer)
+                        os << sc[o.getSpeciesID()].getSeqName(o.getSequenceID()) << "\t"
+                           << "blstools\t"
+                           << mc[o.getMotifID()].getName() << "\t"
+                           << o.getSequencePos() << "\t"
+                           << o.getSequencePos() + mc[o.getMotifID()].size() << "\t"
+                           << o.getScore() << "\t"
+                           << o.getStrand() << "\t.\t.\n";
+
+                        /*os << o.getMotifID() << "\t" << o.getSpeciesID() << "\t"
+                           << o.getSequenceID() << "\t" << o.getSequencePos()
+                           << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";*/
+
+                buffer.clear();
+
+                if (!active)
+                        break;
+
+                cvEmpty.notify_one();   // notify a single worker thread that
+                                        // it is OK to push work onto the buffer
+        }
+
+        if (!filename.empty())
+                ofs.close();
+}
+
 
 PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
         outputFilename("occurrences.txt"),
@@ -532,10 +573,10 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
         // C) Scan the sequences
         ofstream ofsCutoff("motifCutoff.txt");
 
-        ofstream ofs;
-        if (!outputFilename.empty())
-                ofs.open(outputFilename.c_str());
-        ostream& os = (outputFilename.empty()) ? cout : ofs;
+        // start the output thread
+        string filename(outputFilename.c_str());
+        thread ot(&PWMScan::outputThread, this, cref(filename),
+                  cref(speciesContainer), cref(motifContainer));
 
         size_t speciesID = 0;
         for (auto species : speciesContainer) {
@@ -580,21 +621,27 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
 
                 // scan the sequences for PWM occurrences
                 if (simpleMode) {
-                        scanPWMNaive(speciesID++, motifContainer, seqBatch, os);
+                        scanPWMNaive(speciesID++, motifContainer, seqBatch);
                 } else if (cudaMode) {
 #ifdef HAVE_CUDA
-                        scanPWMCUBLAS(speciesID++, motifContainer, seqBatch, os);
+                        scanPWMCUBLAS(speciesID++, motifContainer, seqBatch);
 #else
                         cerr << "ERROR: CUDA support not enabled in blstools\n";
                         cerr << "Please recompile with CUDA support enabled" << endl;
 #endif
                 } else {
-                        scanPWMBLAS(speciesID++, motifContainer, seqBatch, os);
+                        scanPWMBLAS(speciesID++, motifContainer, seqBatch);
                 }
         }
 
-        if (!outputFilename.empty())
-                ofs.close();
+        // wait for the output thread to finish
+        cout << "Right before joint ... " << endl;
+        myMutex.lock();
+        active = false;
+        myMutex.unlock();
+        cvFull.notify_one();
+
+        ot.join();
 
         ofsCutoff.close();
 
