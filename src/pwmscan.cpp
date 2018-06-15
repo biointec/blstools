@@ -373,7 +373,7 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
 		// write the output to disk
 		if (outputTask[currOutputTask].valid())
 			outputTask[currOutputTask].get();
-		outputTask[currOutputTask] = async(launch::async, &PWMScan::writeToDisk, this, speciesID, cref(occurrences));
+		outputTask[currOutputTask] = async(launch::async, &PWMScan::writeOccToDisk, this, speciesID, cref(occurrences));
 		currOutputTask = (currOutputTask + 1) % nOutputTasks;
 
                 occurrences.clear();
