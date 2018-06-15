@@ -390,7 +390,9 @@ void PWMScan::commitOccurrences(const std::vector<MotifOccurrence>& chunk)
         cvFull.notify_one();
 }
 
-void PWMScan::outputThread(const std::string& filename)
+void PWMScan::outputThread(const std::string& filename,
+                           const SpeciesContainer& sc,
+                           const MotifContainer& mc)
 {
         ofstream ofs;
         if (!filename.empty())
@@ -405,9 +407,17 @@ void PWMScan::outputThread(const std::string& filename)
 
                 totMatches += buffer.size();
                 for (auto o : buffer)
-                        os << o.getMotifID() << "\t" << o.getSpeciesID() << "\t"
+                        os << sc[o.getSpeciesID()].getSeqName(o.getSequenceID()) << "\t"
+                           << "blstools\t"
+                           << mc[o.getMotifID()].getName() << "\t"
+                           << o.getSequencePos() << "\t"
+                           << o.getSequencePos() + mc[o.getMotifID()].size() << "\t"
+                           << o.getScore() << "\t"
+                           << o.getStrand() << "\t.\t.\n";
+
+                        /*os << o.getMotifID() << "\t" << o.getSpeciesID() << "\t"
                            << o.getSequenceID() << "\t" << o.getSequencePos()
-                           << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";
+                           << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";*/
 
                 buffer.clear();
 
@@ -525,7 +535,8 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
 
         // start the output thread
         string filename(outputFilename.c_str());
-        thread ot(&PWMScan::outputThread, this, cref(filename));
+        thread ot(&PWMScan::outputThread, this, cref(filename),
+                  cref(speciesContainer), cref(motifContainer));
 
         size_t speciesID = 0;
         for (auto species : speciesContainer) {
