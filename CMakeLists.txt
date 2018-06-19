@@ -24,6 +24,13 @@ add_definitions("-DBLSTOOLS_MAJOR_VERSION=${${PROJECT_NAME}_MAJOR_VERSION}")
 add_definitions("-DBLSTOOLS_MINOR_VERSION=${${PROJECT_NAME}_MINOR_VERSION}")
 add_definitions("-DBLSTOOLS_PATCH_LEVEL=${${PROJECT_NAME}_PATCH_LEVEL}")
 
+# uncomment the portion below to disable assertions                                                                                                                                                               
+if (CMAKE_BUILD_TYPE STREQUAL Release)                                                                                                                                                                            
+        add_definitions(-DNDEBUG)
+else (CMAKE_BUILD_TYPE STREQUAL Release)
+        add_definitions(-DDEBUG)
+endif (CMAKE_BUILD_TYPE STREQUAL Release)
+
 include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
 if(COMPILER_SUPPORTS_CXX11)
