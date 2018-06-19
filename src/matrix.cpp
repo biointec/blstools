@@ -59,25 +59,25 @@ void Matrix<deci>::gemm(const Matrix &A, const Matrix &B, int rowB, int nColB)
  * @param B Right-hand p x m matrix
  */
 template <>
-void Matrix<deci>::gemm(const Matrix &A, const SubMatrix<deci> &B)
+void Matrix<deci>::gemm(const SubMatrix<deci> &A, const Matrix &B)
 {
         const deci zero = 0;
         const deci one = 1;
 
         int m = A.nRows(), n = B.nCols();
-        int LDA = A.nRows(), k = A.nCols(), LDB = B.getLD();
-        gemm_f77("N", "N", &m, &n, &k, &one, A.data, &LDA,
-                 B.getDataPtr(), &LDB, &zero, data, &m);
+        int LDA = A.nRows(), k = B.nRows(), LDB = B.nRows();
+        gemm_f77("N", "N", &m, &n, &k, &one, A.getDataPtr(), &LDA,
+                 B.data, &LDB, &zero, data, &m);
 }
 
 template <>
-void Matrix<deci>::gemm(const Matrix& A, const SubMatrix<deci>& B,
+void Matrix<deci>::gemm(const SubMatrix<deci>& A, const Matrix& B,
                         const vector<pair<size_t, size_t> >& matBlocksA)
 {
-        const deci zero = 0;
+      /*  const deci zero = 0;
         const deci one = 1;
 
-        int LDA = A.nRows(), LDB = B.getLD(), LDC = nRows();
+        int LDA = A.nRows(), LDB = B.nRows(), LDC = nRows();
         int n = B.nCols();
 
         for (size_t i = 0; i < matBlocksA.size(); i++) {
@@ -89,7 +89,7 @@ void Matrix<deci>::gemm(const Matrix& A, const SubMatrix<deci>& B,
 
                 gemm_f77("N", "N", &m, &n, &k, &one, A.data + start, &LDA,
                          B.getDataPtr(), &LDB, &zero, data + start, &LDC);
-        }
+        }*/
 }
 
 template <>

@@ -108,19 +108,20 @@ void PWMScan::extractOccurrences(const Matrix<float>& R, size_t offset,
                                  const MotifContainer& motifContainer,
                                  vector<MotifOccurrence>& motifOcc)
 {
-        for (size_t j = 0; j < sm.getNumOccCol(); j++) {
-                for (size_t i = 0; i < (size_t)R.nRows(); i++) {
+        for (size_t j = 0; j < (size_t)R.nCols(); j++) {
+
+                size_t motifIdx = motifContainer.getMotifIDAtCol(j);
+                const Motif& m = motifContainer[motifIdx];
+
+                for (size_t i = 0; i < sm.getNumOccRow(); i++) {
 
                         float thisScore = R(i,j);
-                        size_t motifIdx = motifContainer.getMotifIDAtRow(i);
-                        const Motif& m = motifContainer[motifIdx];
-
                         if (thisScore < m.getThreshold())
                                 continue;
 
                         // at this point an occurrence is found
-                        SeqPos seqPos = sm.getSeqPos(offset, j);
-                        size_t remSeqLen = sm.getRemainingSeqLen(offset, j);
+                        SeqPos seqPos = sm.getSeqPos(i, offset);
+                        size_t remSeqLen = sm.getRemainingSeqLen(i, offset);
 
                         if (m.size() > remSeqLen)
                                 continue;
@@ -147,7 +148,7 @@ void extractOccurrences2(int m, const map<int, int>& offset_v, int *occIdx, floa
 			int i = occIdx[idx] % m;
 			int j = occIdx[idx] / m;
 
-			size_t motifIdx = motifContainer.getMotifIDAtRow(i);
+			size_t motifIdx = motifContainer.getMotifIDAtCol(i);
 	                const Motif& m = motifContainer[motifIdx];
 
         	        SeqPos seqPos = sm.getSeqPos(offset, j);
@@ -221,10 +222,10 @@ void PWMScan::scanThreadBLAS(size_t speciesID, const MotifContainer& motifContai
         const Matrix<float> &P = motifContainer.getMatrix();
 
         // sequence matrix
-        SeqMatrix sm(K, overlap, W);
+        SeqMatrix sm(W, K, overlap);
 
         // result matrix
-        Matrix<float> R(P.nRows(), W);
+        Matrix<float> R(W, P.nCols());
         const auto matBlock = motifContainer.getMatrixBlock();
 
         vector<MotifOccurrence> occurrences;
@@ -232,8 +233,8 @@ void PWMScan::scanThreadBLAS(size_t speciesID, const MotifContainer& motifContai
         while (sm.getNextSeqMatrix(seqBatch)) {
                 for (size_t offset = 0; offset < K; offset++) {
                         SubMatrix<float> subS = sm.getSubMatrix(offset);
-                        //R.gemm(P, subS);
-                        R.gemm(P, subS, matBlock);
+                        R.gemm(subS, P);
+                        //R.gemm(P, subS, matBlock);
                         extractOccurrences(R, offset, sm, motifContainer, occurrences);
                 }
 

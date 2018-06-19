@@ -301,7 +301,7 @@ bool FastaBatch::getNextOverlappingBlock(SeqBlock& block, size_t maxSize,
 bool SeqMatrix::getNextSeqMatrix(FastaBatch& bf)
 {
         // compute the maximum block size
-        size_t maxBlockSize = K * numCol + overlap;
+        size_t maxBlockSize = K * numRow + overlap;
 
         // get the next block
         if(!bf.getNextOverlappingBlock(block, maxBlockSize, overlap))
@@ -309,19 +309,19 @@ bool SeqMatrix::getNextSeqMatrix(FastaBatch& bf)
 
         // fill the sequence matrix
         S.fill(0.0f);
-        for (size_t j = 0; j < numCol; j++) {
-                for (size_t i = 0; i < (K + overlap); i++) {
-                        if ((j*K+i) >= block.size())
+        for (size_t i = 0; i < numRow; i++) {
+                for (size_t j = 0; j < (K + overlap); j++) {
+                        if ((i*K+j) >= block.size())
                                 return true;
-                        if (block[j*K+i] == 'A')
-                                S(4*i+0, j) = 1;
-                        if (block[j*K+i] == 'C')
-                                S(4*i+1, j) = 1;
-                        if (block[j*K+i] == 'G')
-                                S(4*i+2, j) = 1;
-                        if (block[j*K+i] == 'T')
-                                S(4*i+3, j) = 1;
-                        numOccCol = j + 1;
+                        if (block[i*K+j] == 'A')
+                                S(i, 4*j+0) = 1;
+                        if (block[i*K+j] == 'C')
+                                S(i, 4*j+1) = 1;
+                        if (block[i*K+j] == 'G')
+                                S(i, 4*j+2) = 1;
+                        if (block[i*K+j] == 'T')
+                                S(i, 4*j+3) = 1;
+                        numOccRow = i + 1;
                 }
         }
 
@@ -331,7 +331,7 @@ bool SeqMatrix::getNextSeqMatrix(FastaBatch& bf)
 std::ostream& operator<< (std::ostream& os, const SeqMatrix& sm)
 {
         os << "Matrix dims: " << sm.S.nRows() << " x " << sm.S.nCols()
-           << ", of which " << sm.numOccCol << " are occupied\n";
+           << ", of which " << sm.numOccRow << " are occupied\n";
         os << sm.block << "\n";
         sm.S.printSequence(sm.overlap);
         return os;

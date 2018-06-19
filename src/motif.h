@@ -316,7 +316,7 @@ private:
         Matrix<float> P;
         std::vector<std::pair<size_t, size_t> > matBlock;
 
-        std::vector<size_t> row2MotifID;
+        std::vector<size_t> col2MotifID;
 
 public:
         /**
@@ -369,11 +369,11 @@ public:
         }
 
         /**
-         * Get the motif ID contained in row i of the matrix
-         * @return The motif ID at row i of the matrix
+         * Get the motif ID contained in column i of the matrix
+         * @return The motif ID at column i of the matrix
          */
-        size_t getMotifIDAtRow(size_t i) const {
-                return row2MotifID[i];
+        size_t getMotifIDAtCol(size_t i) const {
+                return col2MotifID[i];
         }
 
         /**

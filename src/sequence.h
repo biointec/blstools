@@ -316,10 +316,10 @@ class SeqMatrix {
 public:
 //private:
         // matrix dimensions = 4(K + overlap) x numCol
-        size_t K;                       // number of sequence rows
-        size_t overlap;                 // number of overlap rows
-        size_t numCol;                  // number of columns
-        size_t numOccCol;               // number of occupied columns
+        size_t K;                       // number of sequence columns
+        size_t overlap;                 // number of overlap columns
+        size_t numRow;                  // number of rows
+        size_t numOccRow;               // number of occupied rows
 
         Matrix<float> S;                // actual matrix
         SeqBlock block;                 // sequence block
@@ -327,13 +327,13 @@ public:
 public:
         /**
          * Default constructor
-         * @param K Number of sequence rows
-         * @param overlap Number of overlap rows
-         * @param numCol Number of sequence columns
+         * @param numRow Number of sequence columns
+         * @param K Number of sequence columns
+         * @param overlap Number of overlap cols
          */
-        SeqMatrix(size_t K, size_t overlap, size_t numCol) :
-                K(K), overlap(overlap), numCol(numCol), numOccCol(0),
-                S(4*(K+overlap), numCol) {}
+        SeqMatrix(size_t numRow, size_t K, size_t overlap) :
+                K(K), overlap(overlap), numRow(numRow), numOccRow(0),
+                S(numRow, 4*(K+overlap)) {}
 
         /**
          * Fill the next sequence matrix
@@ -349,7 +349,7 @@ public:
          * @return The remaining length within this sequence
          */
         size_t getRemainingSeqLen(size_t row, size_t col) const {
-                size_t blockPos = K*col + row;
+                size_t blockPos = K*row + col;
                 if (blockPos >= block.size())
                         return 0;
                 return block.getRemainingSeqLen(blockPos);
@@ -362,15 +362,15 @@ public:
          * @return The sequence position at (row, col)
          */
         SeqPos getSeqPos(size_t row, size_t col) const {
-                return block.getSeqPos(K*col + row);
+                return block.getSeqPos(K*row + col);
         }
 
         /**
          * Get the number of occupied columns in the matrix
          * @return The number of occupied columns
          */
-        size_t getNumOccCol() const {
-                return numOccCol;
+        size_t getNumOccRow() const {
+                return numOccRow;
         }
 
         /**
@@ -379,7 +379,7 @@ public:
          * @return A submatrix
          */
         const SubMatrix<float> getSubMatrix(size_t index) const {
-                return SubMatrix<float>(S, 4*index, 4*(overlap + 1), 0, numOccCol);
+                return SubMatrix<float>(S, 0, numOccRow, 4*index, 4*(overlap + 1));
         }
 
         /**

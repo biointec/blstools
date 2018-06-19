@@ -370,8 +370,8 @@ void MotifContainer::generateMatrix()
         size_t m = motifs.size();
         size_t k = 4 * getMaxMotifLen();
 
-        P.setDimensions(m, k);
-        P.allocateMemory(0);
+        P.setDimensions(k, m);
+        P.allocateMemory(0.0f);
 
         // fill the matrix
         for (size_t i = 0; i < motifs.size(); i++) {
@@ -379,8 +379,8 @@ void MotifContainer::generateMatrix()
                 const Motif& fwd = motifs[i];
                 for (size_t j = 0; j < fwd.size(); j++)
                         for (size_t o = 0; o < 4; o++)
-                                P(i, 4*j+o) = fwd[j][o];
-                row2MotifID.push_back(i);
+                                P(4*j+o, i) = fwd[j][o];
+                col2MotifID.push_back(i);
         }
 
         size_t numBlocks = 1;

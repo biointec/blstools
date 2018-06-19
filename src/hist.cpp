@@ -65,10 +65,10 @@ void Histogram::extractObsScore(const Matrix<float>& R, size_t offset,
                           const MotifContainer& motifContainer,
                           vector<ScoreHistogram>& histContainer)
 {
-        for (size_t j = 0; j < sm.getNumOccCol(); j++) {
+        for (size_t j = 0; j < sm.getNumOccRow(); j++) {
                 for (size_t i = 0; i < (size_t)R.nRows(); i++) {
                         float thisScore = R(i,j);
-                        size_t motifID = motifContainer.getMotifIDAtRow(i);
+                        size_t motifID = motifContainer.getMotifIDAtCol(i);
 
                         // check of the occurrence is valid
                         size_t remSeqLen = sm.getRemainingSeqLen(offset, j);
@@ -102,7 +102,7 @@ void Histogram::histThread(const MotifContainer& motifContainer,
                 for (size_t offset = 0; offset < K; offset++) {
                         SubMatrix<float> subS = sm.getSubMatrix(offset);
                         //R.gemm(P, subS);
-                        R.gemm(P, subS, matBlock);
+                        //R.gemm(P, subS, matBlock);
                         extractObsScore(R, offset, sm, motifContainer, histContainer);
                 }
 

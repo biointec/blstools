@@ -165,14 +165,14 @@ public:
          * @param A Left-hand m x k matrix
          * @param B Right-hand K x n matrix (K >= k)
          */
-        void gemm(const Matrix &A, const SubMatrix<T> &B);
+        void gemm(const SubMatrix<T> &A, const Matrix &B);
 
         /**
-         * Perform a matrix-matrix multiplication A * submatrix(B)
+         * Perform a matrix-matrix multiplication submatrix(A) * B
          * @param A Left-hand m x k matrix
          * @param B Right-hand K x n matrix (K >= k)
          */
-        void gemm(const Matrix &A, const SubMatrix<T> &B,
+        void gemm(const SubMatrix<T>& A, const Matrix& B,
                   const std::vector<std::pair<size_t, size_t> >& matBlocksA);
 
         /** returns the 2-norm of the matrix
