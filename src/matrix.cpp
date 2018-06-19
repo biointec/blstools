@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2017 Jan Fostier (jan.fostier@ugent.be)                 *
+ *   Copyright (C) 2017-2018 Jan Fostier (jan.fostier@ugent.be)            *
  *   This file is part of BLStools                                         *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -22,152 +22,110 @@
 #include <cstdlib>
 #include <cstring>
 #include <complex>
+#include <config.h>
 
 #include "matrix.h"
-#include "blas.h"
 
 using namespace std;
+
+// ============================================================================
+// BLAS SINGLE/DOUBLE PRECISION FUNCTION PROTOTYPES
+// ============================================================================
+
+#define sgemm_f77 F77_FUNC (sgemm, SGEMM)
+
+// general matrix-matrix multiplication
+extern "C" void sgemm_f77(const char* transA, const char* transB,
+                          const int* m, const int* n, const int* k,
+                          const float* alpha,
+                          const float* A, const int* LDA,
+                          const float* B, const int* LDB,
+                          const float* beta,
+                          float *C, const int* LDC);
 
 // ===========================================================================
 // MATRIX CLASS
 // ===========================================================================
 
-/**
- * Specialized gemm function for deci types with BLAS
- * @param A Left-hand n x p matrix
- * @param B Right-hand p x m matrix
- */
-template <>
-void Matrix<deci>::gemm(const Matrix &A, const Matrix &B, int rowB, int nColB)
+template<>
+void Matrix<float>::printSequence(size_t overlap) const
 {
-        assert(isInitialized());
-        assert(A.isInitialized());
-        assert(B.isInitialized());
+        cout << "Print matrix: " << nRows() << " x " << nCols() << endl;
+        int K = nCols() / 4 - overlap;
+        cout << "K: " << K << ", overlap: " << overlap << endl;
 
-        const deci zero = 0;
-        const deci one = 1;
+        for (size_t r = 0; r < nRows(); r++) {
+                for (size_t c = 0; c < nCols(); c += 4) {
+                        if ((*this)(r, c+0) == 1)
+                                cout << "A\t";
+                        if ((*this)(r, c+1) == 1)
+                                cout << "C\t";
+                        if ((*this)(r, c+2) == 1)
+                                cout << "G\t";
+                        if ((*this)(r, c+3) == 1)
+                                cout << "T\t";
+                }
+        }
 
-        int m = nRows(), n = nColB;
-        int LDA = A.nRows(), k = A.nCols(), LDB = B.nRows();
-        gemm_f77("N", "N", &m, &n, &k, &one, A.data, &LDA,
-                 B.data + rowB, &LDB, &zero, data, &m);
+        cout << endl;
 }
 
 /**
- * Specialized gemm function for deci types with BLAS
- * @param A Left-hand n x p matrix
- * @param B Right-hand p x m matrix
+ * Perform a matrix-matrix multiplication submatrix(A) * B (float specialized)
+ * @param A Left-hand m x k submatrix
+ * @param B Right-hand k x n matrix
  */
 template <>
-void Matrix<deci>::gemm(const SubMatrix<deci> &A, const Matrix &B)
+void Matrix<float>::gemm(const SubMatrix<float>& A, const Matrix& B)
 {
-        const deci zero = 0;
-        const deci one = 1;
+        const float zero = 0.0f;
+        const float one = 1.0f;
 
-        int m = A.nRows(), n = B.nCols();
-        int LDA = A.nRows(), k = B.nRows(), LDB = B.nRows();
-        gemm_f77("N", "N", &m, &n, &k, &one, A.getDataPtr(), &LDA,
-                 B.data, &LDB, &zero, data, &m);
+        int m = A.nRows(), n = B.nCols(), k = B.nRows();
+        int LDA = A.nRows(), LDB = B.nRows(), LDC = nRows();
+        sgemm_f77("N", "N", &m, &n, &k, &one, A.getDataPtr(), &LDA,
+                  B.data, &LDB, &zero, data, &LDC);
 }
 
 template <>
-void Matrix<deci>::gemm(const SubMatrix<deci>& A, const Matrix& B,
-                        const vector<pair<size_t, size_t> >& matBlocksA)
+void Matrix<float>::gemm(const SubMatrix<float>& A, const Matrix& B,
+                         const vector<pair<size_t, size_t> >& matBlocksB)
 {
-      /*  const deci zero = 0;
-        const deci one = 1;
+        const float zero = 0.0f;
+        const float one = 1.0f;
 
         int LDA = A.nRows(), LDB = B.nRows(), LDC = nRows();
-        int n = B.nCols();
+        int m = A.nRows();
 
-        for (size_t i = 0; i < matBlocksA.size(); i++) {
-                size_t start = (i == 0) ? 0 : matBlocksA[i-1].first;
-                size_t end = matBlocksA[i].first;
+        for (size_t i = 0; i < matBlocksB.size(); i++) {
+                size_t colStart = (i == 0) ? 0 : matBlocksB[i-1].first;
+                size_t colEnd = matBlocksB[i].first;
 
-                int m = end-start;
-                int k = matBlocksA[i].second;
+                int n = colEnd-colStart;
+                int k = matBlocksB[i].second;
 
-                gemm_f77("N", "N", &m, &n, &k, &one, A.data + start, &LDA,
-                         B.getDataPtr(), &LDB, &zero, data + start, &LDC);
-        }*/
-}
-
-template <>
-double Matrix<dcomplex>::norm() const
-{
-	double result = 0.0;
-	for (int cr=0;cr<nRows();cr++)
-		for (int cc=0;cc<nCols();cc++)
-			result += abs((*this)(cr,cc)) * abs((*this)(cr,cc));
-	return sqrt(result);
-}
-
-/**
- * Specialized print matrix elements to the output stream for deci complex
- * @param os Output stream to add to
- * @param M Matrix to print
- * @return Output stream with the matrix elements
- */
-template <>
-std::ostream& operator<<(std::ostream& os, const Matrix<cplx> &M)
-{
-        int oldPrec = os.precision();
-        os.precision(15);
-        for (int r = 0; r < M.nRows(); r++) {
-                for (int c = 0; c < (M.nCols()-1); c++) {
-                        cplx el = M.data[c*M.nRows()+r];
-                        os << real(el) << "\t" << imag(el) << "\t";
-                }
-                cplx el = M.data[(M.nCols()-1)*M.nRows()+r];
-                os << real(el) << "\t" << imag(el) << endl;
+                sgemm_f77("N", "N", &m, &n, &k, &one, A.getDataPtr(), &LDA,
+                          B.data + colStart*LDB, &LDB, &zero,
+                          data + colStart*LDC, &LDC);
         }
-        cout.precision(oldPrec);
-        return os;
 }
 
 /**
- * Specialized print matrix elements to the output stream for decis
+ * Specialized print matrix elements to the output stream for floats
  * @param os Output stream to add to
  * @param M Matrix to print
  * @return Output stream with the matrix elements
  */
 template <>
-std::ostream& operator<<(std::ostream& os, const Matrix<deci> &M)
+std::ostream& operator<<(std::ostream& os, const Matrix<float>& M)
 {
-        int oldPrec = os.precision();
-        os.precision(15);
-        for (int r = 0; r < M.nRows(); r++) {
-                for (int c = 0; c < (M.nCols()-1); c++)
+        std::streamsize oldPrec = os.precision();
+        os.precision(2);
+        for (size_t r = 0; r < M.nRows(); r++) {
+                for (size_t c = 0; c < (M.nCols()-1); c++)
                         os << M.data[c*M.nRows()+r] << "\t";
                 os << M.data[(M.nCols()-1)*M.nRows()+r] << endl;
         }
         cout.precision(oldPrec);
         return os;
-}
-
-template<>
-void Matrix<deci>::printSequence(size_t overlap) const
-{
-        cout << "Print matrix: " << nRows() << " x " << nCols() << endl;
-        int K = nRows() / 4 - overlap;
-        cout << "K: " << K << ", overlap: " << overlap << endl;
-
-        for (int r = 0; r < nRows(); r += 4) {
-                if (r/4 == K)
-                        cout << "------------------------\n";
-                cout << r/4+1 << "\t";
-                for (int c = 0; c < nCols(); c++) {
-                        if ((*this)(r+0, c) == 1)
-                                cout << "A\t";
-                        if ((*this)(r+1, c) == 1)
-                                cout << "C\t";
-                        if ((*this)(r+2, c) == 1)
-                                cout << "G\t";
-                        if ((*this)(r+3, c) == 1)
-                                cout << "T\t";
-                }
-
-                cout << endl;
-        }
-
 }

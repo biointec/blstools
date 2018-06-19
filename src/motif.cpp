@@ -370,8 +370,7 @@ void MotifContainer::generateMatrix()
         size_t m = motifs.size();
         size_t k = 4 * getMaxMotifLen();
 
-        P.setDimensions(k, m);
-        P.allocateMemory(0.0f);
+        P.resize(k, m, 0.0f);
 
         // fill the matrix
         for (size_t i = 0; i < motifs.size(); i++) {

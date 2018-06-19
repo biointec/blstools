@@ -108,15 +108,17 @@ void PWMScan::extractOccurrences(const Matrix<float>& R, size_t offset,
                                  const MotifContainer& motifContainer,
                                  vector<MotifOccurrence>& motifOcc)
 {
-        for (size_t j = 0; j < (size_t)R.nCols(); j++) {
+        for (size_t j = 0; j < R.nCols(); j++) {
 
+                // get the motif information
                 size_t motifIdx = motifContainer.getMotifIDAtCol(j);
                 const Motif& m = motifContainer[motifIdx];
+                const float threshold = m.getThreshold();
 
                 for (size_t i = 0; i < sm.getNumOccRow(); i++) {
 
                         float thisScore = R(i,j);
-                        if (thisScore < m.getThreshold())
+                        if (thisScore < threshold)
                                 continue;
 
                         // at this point an occurrence is found

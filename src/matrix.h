@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2017 Jan Fostier (jan.fostier@ugent.be)                 *
+ *   Copyright (C) 2017-2018 Jan Fostier (jan.fostier@ugent.be)            *
  *   This file is part of BLStools                                         *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -39,88 +39,106 @@ template <class T>
 std::ostream& operator<<(std::ostream& os, const Matrix<T>& M);
 
 // ===========================================================================
-// MATRIX CLASS
+// MATRIX CLASS (Column major storage)
 // ===========================================================================
 
 /**
- * Generic template matrix class with some specialized functions for
- * the complex deci type which use the BLAS and LAPACK
+ * Generic template matrix class with some specialized functions for float types
  */
 template <class T>
 class Matrix
 {
 public:
-        int rows;       // number of rows
-        int cols;       // number of columns
+        size_t rows;    // number of rows
+        size_t cols;    // number of columns
         T *data;        // actual storage for the elements
 
 public:
         /**
          * Default constructor
          */
-        Matrix();
+        Matrix() : rows(0), cols(0), data(NULL) {}
 
         /**
-         * Creates a nRows x nCols matrix
+         * Create a nRows x nCols matrix
          * @param nRows Number of rows in the matrix
          * @param nCols Number of colums in the matrix
          */
-        Matrix(int nRows, int nCols);
+        Matrix(size_t nRows, size_t nCols) : rows(nRows), cols(nCols) {
+                assert(rows > 0);
+                assert(cols > 0);
+                data = new T[rows*cols];
+        }
 
         /**
-         * Creates a nRows x nCols matrix and initializes it
+         * Create a nRows x nCols matrix and initialize it
          * @param nRows Number of rows in the matrix
          * @param nCols Number of colums in the matrix
          * @param el Initializer object
          */
-        Matrix(int nRows, int nCols, const T& el);
+        Matrix(size_t nRows, size_t nCols, const T& el) : Matrix(nRows, nCols) {
+                fill(el);
+        }
 
         /**
-         * Copy constructor for matrix
+         * Forbid copy constructor
          * @param M Matrix to copy
          */
-        Matrix(const Matrix& M);
+        Matrix(const Matrix& M) = delete;
 
         /**
          * Matrix destructor
          */
-        ~Matrix();
+        ~Matrix() {
+                if (data != NULL)
+                        delete [] data;
+        }
+
+        /**
+         * Resize the matrix and initialize it
+         * @param nRows Number of rows in the matrix
+         * @param nCols Number of colums in the matrix
+         * @param el Initializer object
+         */
+        void resize(size_t nRows, size_t nCols, const T& el) {
+                assert(nRows > 0);
+                assert(nCols > 0);
+
+                // delete data
+                if (data != NULL)
+                        delete [] data;
+
+                // create memory for new matrix
+                rows = nRows;
+                cols = nCols;
+                data = new T[rows*cols];
+                fill(el);
+        }
+
+        /**
+         * Fill the matrix with a certain element
+         * @param el Element to fill the matrix with
+         */
+        void fill(const T& el) {
+                for (size_t i = 0; i < rows*cols; i++)
+                        data[i] = el;
+        }
 
         /**
          * Retrieve the number of rows in the matrix
          * @return Number of rows
          */
-        int nRows() const { return abs(rows); };
+        size_t nRows() const {
+                return rows;
+        }
 
         /**
          * Retrieve the number of columns in the matrix
          * @return Number of columns
          */
-        int nCols() const { return abs(cols); };
-
-        /**
-         * Set the matrix dimensions without initializing memory
-         * @param nRows Number of rows in the matrix
-         * @param nCols Number of colums in the matrix
-         */
-        void setDimensions(int nRows, int nCols);
-
-        /**
-         * Allocate memory for the matrix
-         */
-        void allocateMemory();
-
-        /**
-         * Allocate memory for the matrix and initialize it
-         * @param el Initializer object
-         */
-        void allocateMemory(const T& el);
-
-        /**
-         * Returns true if the data pointer has been initialized
-         * @return True of false
-         */
-        bool isInitialized() const;
+        size_t nCols() const {
+                return cols;
+        }
 
         /**
          * Overloaded parentheses to access/modify elements
@@ -128,7 +146,9 @@ public:
          * @param col Column specification
          * @return Element at specified position
          */
-        T& operator()(int row, int col) const;
+        T& operator()(size_t row, size_t col) const {
+                return data[col*rows+row];
+        }
 
         /**
          * Print matrix elements to the output stream
@@ -146,134 +166,23 @@ public:
         void printSequence(size_t overlap) const;
 
         /**
-         * Fill the matrix with a certain element
-         * @param el Element to fill the matrix with
+         * Perform a matrix-matrix multiplication submatrix(A) * B
+         * @param A Left-hand m x K matrix (K >= k)
+         * @param B Right-hand k x n matrix
          */
-        void fill(const T& el);
-
-        /**
-         * Perform a matrix-matrix multiplication A * submatrix(B)
-         * @param A Left-hand m x k matrix
-         * @param B Right-hand K x n matrix (K >= k)
-         * @param rowB First row of B to consider
-         * @param nColB Number of column of B to consider
-         */
-        void gemm(const Matrix &A, const Matrix &B, int rowB, int nColB);
-
-        /**
-         * Perform a matrix-matrix multiplication A * submatrix(B)
-         * @param A Left-hand m x k matrix
-         * @param B Right-hand K x n matrix (K >= k)
-         */
-        void gemm(const SubMatrix<T> &A, const Matrix &B);
+        void gemm(const SubMatrix<T>& A, const Matrix& B);
 
         /**
          * Perform a matrix-matrix multiplication submatrix(A) * B
          * @param A Left-hand m x k matrix
          * @param B Right-hand K x n matrix (K >= k)
+         * @param matBlocksB Matrix blocks of non-zero elements of B
          */
         void gemm(const SubMatrix<T>& A, const Matrix& B,
-                  const std::vector<std::pair<size_t, size_t> >& matBlocksA);
-
-        /** returns the 2-norm of the matrix
-        */
-        double norm() const;
+                  const std::vector<std::pair<size_t, size_t> >& matBlocksB);
 
         friend class SubMatrix<T>;
 };
-
-template <class T>
-Matrix<T>::Matrix() : rows(0), cols(0), data(NULL)
-{
-
-}
-
-template <class T>
-Matrix<T>::Matrix(int nRows, int nCols) : rows(nRows), cols(nCols)
-{
-        assert(rows > 0);
-        assert(cols > 0);
-        data = new T[rows*cols];
-}
-
-template <class T>
-Matrix<T>::Matrix(int nRows, int nCols, const T& el) : rows(nRows), cols(nCols)
-{
-        assert(rows > 0);
-        assert(cols > 0);
-        data = new T[rows*cols];
-        fill(el);
-}
-
-template <class T>
-Matrix<T>::Matrix(const Matrix& M)
-{
-        assert(M.isInitialized());
-        cols = M.nCols();
-        rows = M.nRows();
-        data = new T[rows*cols];
-        for (int i = 0; i < rows*cols; i++)
-                data[i] = M.data[i];
-}
-
-template <class T>
-Matrix<T>::~Matrix()
-{
-        if (data != NULL)
-               delete [] data;
-}
-
-template <class T>
-void Matrix<T>::setDimensions(int nRows, int nCols)
-{
-        assert(nRows >= 0);
-        assert(nCols >= 0);
-        // delete data
-        if ((rows > 0) && (cols > 0))
-               delete [] data;
-        data = NULL;
-        rows = nRows;
-        cols = nCols;
-}
-
-template <class T>
-void Matrix<T>::allocateMemory()
-{
-        assert(data == NULL);
-        if (rows*cols > 0)
-                data = new T[rows*cols];
-}
-
-template <class T>
-void Matrix<T>::allocateMemory(const T& el)
-{
-        allocateMemory();
-        fill(el);
-}
-
-template <class T>
-bool Matrix<T>::isInitialized() const
-{
-        if (rows*cols == 0) return true;
-        return (data != NULL);
-}
-
-template <class T>
-inline T& Matrix<T>::operator()(int row, int col) const
-{
-        assert(isInitialized());
-        assert(row >= 0); assert(row < nRows());
-        assert(col >= 0); assert(col < nCols());
-        return data[col*nRows()+row];
-}
-
-template <class T>
-void Matrix<T>::fill(const T& el)
-{
-        assert(isInitialized());
-        for (int i = 0; i < nRows()*nCols(); i++)
-                data[i] = el;
-}
 
 // ===========================================================================
 // SUBMATRIX CLASS
@@ -284,52 +193,67 @@ class SubMatrix
 {
 public:
         const Matrix<T>& M;     // parent matrix
-        int firstRow;           // first row index
-        int rows;               // number of rows
-        int firstCol;           // first colum index
-        int cols;               // number of columns
+        size_t firstRow;        // first row index
+        size_t rows;            // number of rows
+        size_t firstCol;        // first colum index
+        size_t cols;            // number of columns
 
 public:
         /**
          * Default constructor
+         * @param M Const-reference to parent matrix
+         * @param firstRow First row of submatrix
+         * @param nRows Number of rows in submatrix
+         * @param firstCol First column of submatrix
+         * @param nCols Number of columns in submatrix
          */
-        SubMatrix(const Matrix<T>& M, int firstRow, int nRows, int firstCol,
-                  int nCols) : M(M), firstRow(firstRow), rows(nRows),
-                  firstCol(firstCol), cols(nCols) {}
+        SubMatrix(const Matrix<T>& M, size_t firstRow, size_t nRows,
+                  size_t firstCol, size_t nCols) : M(M), firstRow(firstRow),
+                  rows(nRows), firstCol(firstCol), cols(nCols) {}
 
         /**
          * Retrieve the number of rows in the matrix
          * @return Number of rows
          */
-        int nRows() const { return abs(rows); }
+        size_t nRows() const {
+                return rows;
+        }
 
         /**
          * Retrieve the number of columns in the matrix
          * @return Number of columns
          */
-        int nCols() const { return abs(cols); }
+        size_t nCols() const {
+                return cols;
+        }
 
         /**
          * Retrieve the first row of the submatrix
          * @return First rows
          */
-        int getFirstRow() const { return firstRow; }
+        size_t getFirstRow() const {
+                return firstRow;
+        }
 
         /**
          * Retrieve the first columns of the submatrix
          * @return First column
          */
-        int getFirstCol() const { return firstCol; }
+        size_t getFirstCol() const {
+                return firstCol;
+        }
 
         /**
          * Retrieve the leading dimensions
          * @return Leading dimensions
          */
-        int getLD() const { return M.nRows(); };
+        size_t getLD() const {
+                return M.nRows();
+        }
 
         /**
          * Get the data pointer to the first element of the submatrix
-         *
+         * @return Pointer to the first element of the submatrix
          */
         T* getDataPtr() const {
                 return M.data + firstCol * M.nRows() + firstRow;
