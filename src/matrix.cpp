@@ -22,26 +22,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <complex>
-#include <config.h>
 
 #include "matrix.h"
 
 using namespace std;
-
-// ============================================================================
-// BLAS SINGLE/DOUBLE PRECISION FUNCTION PROTOTYPES
-// ============================================================================
-
-#define sgemm_f77 F77_FUNC (sgemm, SGEMM)
-
-// general matrix-matrix multiplication
-extern "C" void sgemm_f77(const char* transA, const char* transB,
-                          const int* m, const int* n, const int* k,
-                          const float* alpha,
-                          const float* A, const int* LDA,
-                          const float* B, const int* LDB,
-                          const float* beta,
-                          float *C, const int* LDC);
 
 // ===========================================================================
 // MATRIX CLASS
@@ -68,46 +52,6 @@ void Matrix<float>::printSequence(size_t overlap) const
         }
 
         cout << endl;
-}
-
-/**
- * Perform a matrix-matrix multiplication submatrix(A) * B (float specialized)
- * @param A Left-hand m x k submatrix
- * @param B Right-hand k x n matrix
- */
-template <>
-void Matrix<float>::gemm(const SubMatrix<float>& A, const Matrix& B)
-{
-        const float zero = 0.0f;
-        const float one = 1.0f;
-
-        int m = A.nRows(), n = B.nCols(), k = B.nRows();
-        int LDA = A.nRows(), LDB = B.nRows(), LDC = nRows();
-        sgemm_f77("N", "N", &m, &n, &k, &one, A.getDataPtr(), &LDA,
-                  B.data, &LDB, &zero, data, &LDC);
-}
-
-template <>
-void Matrix<float>::gemm(const SubMatrix<float>& A, const Matrix& B,
-                         const vector<pair<size_t, size_t> >& matBlocksB)
-{
-        const float zero = 0.0f;
-        const float one = 1.0f;
-
-        int LDA = A.nRows(), LDB = B.nRows(), LDC = nRows();
-        int m = A.nRows();
-
-        for (size_t i = 0; i < matBlocksB.size(); i++) {
-                size_t colStart = (i == 0) ? 0 : matBlocksB[i-1].first;
-                size_t colEnd = matBlocksB[i].first;
-
-                int n = colEnd-colStart;
-                int k = matBlocksB[i].second;
-
-                sgemm_f77("N", "N", &m, &n, &k, &one, A.getDataPtr(), &LDA,
-                          B.data + colStart*LDB, &LDB, &zero,
-                          data + colStart*LDC, &LDC);
-        }
 }
 
 /**

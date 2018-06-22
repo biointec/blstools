@@ -230,13 +230,33 @@ void PWMScan::scanThreadBLAS(size_t speciesID, const MotifContainer& motifContai
         Matrix<float> R(W, P.nCols());
         const auto matBlock = motifContainer.getMatrixBlock();
 
+        // sgemm batch parameters
+        SgemmBatchParams p(matBlock.size());
+
+        for (size_t i = 0; i < matBlock.size(); i++) {
+                size_t colStart = (i == 0) ? 0 : matBlock[i-1].first;
+                size_t colEnd = matBlock[i].first;
+
+                p.m[i] = W;
+                p.k[i] = matBlock[i].second;
+                p.n[i] = colEnd-colStart;
+                p.LDA[i] = W;
+                p.LDB[i] = P.nRows();
+                p.LDC[i] = W;
+                p.alpha[i] = 1.0f;
+                p.beta[i] = 0.0f;
+                p.B_array[i] = P.getData() + colStart*p.LDB[i];
+                p.C_array[i] = R.getData() + colStart*p.LDC[i];
+        }
+
         vector<MotifOccurrence> occurrences;
 
         while (sm.getNextSeqMatrix(seqBatch)) {
                 for (size_t offset = 0; offset < K; offset++) {
-                        SubMatrix<float> subS = sm.getSubMatrix(offset);
-                        R.gemm(subS, P);
-                        //R.gemm(P, subS, matBlock);
+                        for (size_t i = 0; i < matBlock.size(); i++)
+                                p.A_array[i] = sm.getData() + 4*offset*p.LDA[i];
+
+                        Matrix<float>::sgemm_batch(p);
                         extractOccurrences(R, offset, sm, motifContainer, occurrences);
                 }
 

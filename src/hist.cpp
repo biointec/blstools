@@ -100,9 +100,9 @@ void Histogram::histThread(const MotifContainer& motifContainer,
 
         while (sm.getNextSeqMatrix(seqBatch)) {
                 for (size_t offset = 0; offset < K; offset++) {
-                        SubMatrix<float> subS = sm.getSubMatrix(offset);
+                        //SubMatrix<float> subS = sm.getSubMatrix(offset);
                         //R.gemm(P, subS);
-                        //R.gemm(P, subS, matBlock);
+                        //R.gemm(subS, P, matBlock);
                         extractObsScore(R, offset, sm, motifContainer, histContainer);
                 }
 

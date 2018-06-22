@@ -355,6 +355,10 @@ public:
                 return block.getRemainingSeqLen(blockPos);
         }
 
+        float* getData() const {
+                return S.getData();
+        }
+
         /**
          * Given a matrix position (row, col), get the corresponding sequence position
          * @param row row index
@@ -371,15 +375,6 @@ public:
          */
         size_t getNumOccRow() const {
                 return numOccRow;
-        }
-
-        /**
-         * Get the submatrix of S(4*index:4*(index+overlap+1); 0:numOccCol)
-         * @param index start index [0..K-1]
-         * @return A submatrix
-         */
-        const SubMatrix<float> getSubMatrix(size_t index) const {
-                return SubMatrix<float>(S, 0, numOccRow, 4*index, 4*(overlap + 1));
         }
 
         /**

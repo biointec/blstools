@@ -24,6 +24,26 @@
 #include <iostream>
 #include <cassert>
 #include <vector>
+#include <config.h>
+
+#ifdef HAVE_MKL
+        #include "mkl.h"
+#endif
+
+// ============================================================================
+// BLAS SINGLE/DOUBLE PRECISION FUNCTION PROTOTYPES
+// ============================================================================
+
+#define sgemm_f77 F77_FUNC (sgemm, SGEMM)
+
+// general matrix-matrix multiplication
+extern "C" void sgemm_f77(const char* transA, const char* transB,
+                          const int* m, const int* n, const int* k,
+                          const float* alpha,
+                          const float* A, const int* LDA,
+                          const float* B, const int* LDB,
+                          const float* beta,
+                          float *C, const int* LDC);
 
 // ===========================================================================
 // TEMPLATE PROTOTYPES
@@ -33,10 +53,72 @@ template <class T>
 class Matrix;
 
 template <class T>
-class SubMatrix;
-
-template <class T>
 std::ostream& operator<<(std::ostream& os, const Matrix<T>& M);
+
+// ===========================================================================
+// SGEMM BATCH PARAMETERS
+// ===========================================================================
+
+class SgemmBatchParams
+{
+public:
+        int groupCount;
+        int *m, *n, *k, *LDA, *LDB, *LDC;
+        float *alpha, *beta;
+        float **A_array, **B_array, **C_array;
+#ifdef HAVE_MKL
+        CBLAS_TRANSPOSE *trans;
+        int *groupSize;
+#endif
+
+        /**
+         * Constructor
+         * @param groupCount Number of BLAS sgemm operations to perform
+         */
+        SgemmBatchParams(int groupCount) : groupCount(groupCount) {
+                m = new int[groupCount];
+                n = new int[groupCount];
+                k = new int[groupCount];
+                LDA = new int[groupCount];
+                LDB = new int[groupCount];
+                LDC = new int[groupCount];
+                alpha = new float[groupCount];
+                beta = new float[groupCount];
+                A_array = new float*[groupCount];
+                B_array = new float*[groupCount];
+                C_array = new float*[groupCount];
+
+#ifdef HAVE_MKL
+                trans = new CBLAS_TRANSPOSE[groupCount];
+                groupSize = new int[groupCount];
+                for (int i = 0; i < groupCount; i++) {
+                        trans[i] = CblasNoTrans;
+                        groupSize[i] = 1;
+                }
+#endif
+        }
+
+        /**
+         * Destructor
+         */
+        ~SgemmBatchParams() {
+                delete [] m;
+                delete [] n;
+                delete [] k;
+                delete [] LDA;
+                delete [] LDB;
+                delete [] LDC;
+                delete [] alpha;
+                delete [] beta;
+                delete [] A_array;
+                delete [] B_array;
+                delete [] C_array;
+#ifdef HAVE_MKL
+                delete [] trans;
+                delete [] groupSize;
+#endif
+        }
+};
 
 // ===========================================================================
 // MATRIX CLASS (Column major storage)
@@ -48,10 +130,34 @@ std::ostream& operator<<(std::ostream& os, const Matrix<T>& M);
 template <class T>
 class Matrix
 {
-public:
+private:
         size_t rows;    // number of rows
         size_t cols;    // number of columns
         T *data;        // actual storage for the elements
+
+        /**
+         * Allocate memory for data
+         */
+        void allocateMemory() {
+#ifdef HAVE_MKL
+                data = (T*)mkl_malloc(rows*cols*sizeof(T), 64);
+#else
+                data = new T[rows*cols];
+#endif
+        }
+
+        /**
+         * Free memory for data
+         */
+        void freeMemory() {
+                if (data == NULL)
+                        return;
+#ifdef HAVE_MKL
+                mkl_free(data);
+#else
+                delete [] data;
+#endif
+        }
 
 public:
         /**
@@ -62,18 +168,18 @@ public:
         /**
          * Create a nRows x nCols matrix
          * @param nRows Number of rows in the matrix
-         * @param nCols Number of colums in the matrix
+         * @param nCols Number of columns in the matrix
          */
         Matrix(size_t nRows, size_t nCols) : rows(nRows), cols(nCols) {
                 assert(rows > 0);
                 assert(cols > 0);
-                data = new T[rows*cols];
+                allocateMemory();
         }
 
         /**
          * Create a nRows x nCols matrix and initialize it
          * @param nRows Number of rows in the matrix
-         * @param nCols Number of colums in the matrix
+         * @param nCols Number of columns in the matrix
          * @param el Initializer object
          */
         Matrix(size_t nRows, size_t nCols, const T& el) : Matrix(nRows, nCols) {
@@ -90,28 +196,26 @@ public:
          * Matrix destructor
          */
         ~Matrix() {
-                if (data != NULL)
-                        delete [] data;
+                freeMemory();
         }
 
         /**
          * Resize the matrix and initialize it
          * @param nRows Number of rows in the matrix
-         * @param nCols Number of colums in the matrix
+         * @param nCols Number of columns in the matrix
          * @param el Initializer object
          */
         void resize(size_t nRows, size_t nCols, const T& el) {
                 assert(nRows > 0);
                 assert(nCols > 0);
 
-                // delete data
-                if (data != NULL)
-                        delete [] data;
+                // delete existing data
+                freeMemory();
 
                 // create memory for new matrix
                 rows = nRows;
                 cols = nCols;
-                data = new T[rows*cols];
+                allocateMemory();
                 fill(el);
         }
 
@@ -144,10 +248,28 @@ public:
          * Overloaded parentheses to access/modify elements
          * @param row Row specification
          * @param col Column specification
-         * @return Element at specified position
+         * @return Reference to element at specified position
          */
-        T& operator()(size_t row, size_t col) const {
+        T& operator()(size_t row, size_t col) {
                 return data[col*rows+row];
+        }
+
+        /**
+         * Overloaded parentheses to access/modify elements
+         * @param row Row specification
+         * @param col Column specification
+         * @return Const-reference to element at specified position
+         */
+        const T& operator()(size_t row, size_t col) const {
+                return data[col*rows+row];
+        }
+
+        /**
+         * Get the data pointer
+         * @return The data pointer
+         */
+        T* getData() const {
+                return data;
         }
 
         /**
@@ -166,97 +288,22 @@ public:
         void printSequence(size_t overlap) const;
 
         /**
-         * Perform a matrix-matrix multiplication submatrix(A) * B
-         * @param A Left-hand m x K matrix (K >= k)
-         * @param B Right-hand k x n matrix
+         * Perform batch matrix-matrix multiplications
+         * @param p sgemm batch paramters
          */
-        void gemm(const SubMatrix<T>& A, const Matrix& B);
-
-        /**
-         * Perform a matrix-matrix multiplication submatrix(A) * B
-         * @param A Left-hand m x k matrix
-         * @param B Right-hand K x n matrix (K >= k)
-         * @param matBlocksB Matrix blocks of non-zero elements of B
-         */
-        void gemm(const SubMatrix<T>& A, const Matrix& B,
-                  const std::vector<std::pair<size_t, size_t> >& matBlocksB);
-
-        friend class SubMatrix<T>;
-};
-
-// ===========================================================================
-// SUBMATRIX CLASS
-// ===========================================================================
-
-template <class T>
-class SubMatrix
-{
-public:
-        const Matrix<T>& M;     // parent matrix
-        size_t firstRow;        // first row index
-        size_t rows;            // number of rows
-        size_t firstCol;        // first colum index
-        size_t cols;            // number of columns
-
-public:
-        /**
-         * Default constructor
-         * @param M Const-reference to parent matrix
-         * @param firstRow First row of submatrix
-         * @param nRows Number of rows in submatrix
-         * @param firstCol First column of submatrix
-         * @param nCols Number of columns in submatrix
-         */
-        SubMatrix(const Matrix<T>& M, size_t firstRow, size_t nRows,
-                  size_t firstCol, size_t nCols) : M(M), firstRow(firstRow),
-                  rows(nRows), firstCol(firstCol), cols(nCols) {}
-
-        /**
-         * Retrieve the number of rows in the matrix
-         * @return Number of rows
-         */
-        size_t nRows() const {
-                return rows;
-        }
-
-        /**
-         * Retrieve the number of columns in the matrix
-         * @return Number of columns
-         */
-        size_t nCols() const {
-                return cols;
-        }
-
-        /**
-         * Retrieve the first row of the submatrix
-         * @return First rows
-         */
-        size_t getFirstRow() const {
-                return firstRow;
-        }
-
-        /**
-         * Retrieve the first columns of the submatrix
-         * @return First column
-         */
-        size_t getFirstCol() const {
-                return firstCol;
-        }
-
-        /**
-         * Retrieve the leading dimensions
-         * @return Leading dimensions
-         */
-        size_t getLD() const {
-                return M.nRows();
-        }
-
-        /**
-         * Get the data pointer to the first element of the submatrix
-         * @return Pointer to the first element of the submatrix
-         */
-        T* getDataPtr() const {
-                return M.data + firstCol * M.nRows() + firstRow;
+        static void sgemm_batch(const SgemmBatchParams& p)
+        {
+#ifdef HAVE_MKL
+                cblas_sgemm_batch(CblasColMajor, p.trans, p.trans, p.m, p.n,
+                                  p.k, p.alpha, p.A, p.LDA, p.B, p.LDB, p.beta,
+                                  p.C, p.LDC, p.groupCount, p.groupSize);
+#else
+                for (int i = 0; i < p.groupCount; i++)
+                        sgemm_f77("N", "N", &p.m[i], &p.n[i], &p.k[i],
+                                  &p.alpha[i], p.A_array[i], &p.LDA[i],
+                                  p.B_array[i], &p.LDB[i], &p.beta[i],
+                                  p.C_array[i], &p.LDC[i]);
+#endif
         }
 };
 
