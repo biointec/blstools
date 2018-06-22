@@ -1,6 +1,6 @@
 /***************************************************************************
  *   Copyright (C) 2017-2018 Jan Fostier (jan.fostier@ugent.be)            *
- *   This file is part of BLStools                                         *
+ *   This file is part of Blamm                                            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -18,11 +18,6 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#include <iostream>
-#include <cstdlib>
-#include <cstring>
-#include <complex>
-
 #include "matrix.h"
 
 using namespace std;
@@ -31,8 +26,7 @@ using namespace std;
 // MATRIX CLASS
 // ===========================================================================
 
-template<>
-void Matrix<float>::printSequence(size_t overlap) const
+void Matrix::printSequence(size_t overlap) const
 {
         cout << "Print matrix: " << nRows() << " x " << nCols() << endl;
         int K = nCols() / 4 - overlap;
@@ -60,8 +54,7 @@ void Matrix<float>::printSequence(size_t overlap) const
  * @param M Matrix to print
  * @return Output stream with the matrix elements
  */
-template <>
-std::ostream& operator<<(std::ostream& os, const Matrix<float>& M)
+std::ostream& operator<<(std::ostream& os, const Matrix& M)
 {
         std::streamsize oldPrec = os.precision();
         os.precision(2);

@@ -97,7 +97,7 @@ private:
          * @param motifContainer Motif container
          * @param motifOcc Vector containing all motif occurrences
          */
-        void extractOccurrences(const Matrix<float>& R, size_t offset,
+        void extractOccurrences(const Matrix& R, size_t offset,
                                 SeqMatrix& sm,
                                 const MotifContainer& motifContainer,
                                 std::vector<MotifOccurrence>& motifOcc);

@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2017 Jan Fostier (jan.fostier@ugent.be)                 *
- *   This file is part of BLStools                                         *
+ *   Copyright (C) 2017-2018 Jan Fostier (jan.fostier@ugent.be)            *
+ *   This file is part of Blamm                                            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -24,8 +24,7 @@
 #include <vector>
 #include <array>
 #include <atomic>
-#include <mutex>
-#include <condition_variable>
+#include <cassert>
 
 #include "matrix.h"
 
@@ -37,17 +36,17 @@ class ScoreHistogram
 {
 private:
         std::atomic<size_t>* counts;          // score counts
-        float minScore;
-        float maxScore;
-        float width;
-        size_t numBins;
+        float minScore;         // minimum score of the histogram
+        float maxScore;         // maximum score of the histogram
+        size_t numBins;         // number of bins
+        float width;            // width of a bin
 
 public:
         /**
          * Default constructor
          */
-        ScoreHistogram() : counts(NULL), minScore(0.0), maxScore(0.0),
-                width(0.0), numBins(0) {};
+        ScoreHistogram() : counts(NULL), minScore(0.0f), maxScore(0.0f),
+                numBins(0), width(0.0f) {}
 
         /**
          * Default constructor
@@ -58,6 +57,8 @@ public:
         ScoreHistogram(float minScore, float maxScore, size_t numBins) :
                 minScore(minScore), maxScore(maxScore), numBins(numBins)
         {
+                assert(numBins > 0);
+
                 width = (maxScore - minScore) / (float)numBins;
                 counts = new std::atomic<size_t>[numBins];
                 for (size_t i = 0; i < numBins; i++)
@@ -71,8 +72,8 @@ public:
         ScoreHistogram(const ScoreHistogram& S) {
                 minScore = S.minScore;
                 maxScore = S.maxScore;
-                width = S.width;
                 numBins = S.numBins;
+                width = S.width;
 
                 counts = new std::atomic<size_t>[numBins];
                 for (size_t i = 0; i < numBins; i++)
@@ -87,6 +88,10 @@ public:
                         delete [] counts;
         }
 
+        /**
+         * Add a single observation to the histogram
+         * @param score Score of the observation
+         */
         void addObservation(float score) {
                 int binIdx = int((score - minScore) / width);
                 binIdx = std::max<int>(0, binIdx);
@@ -95,16 +100,8 @@ public:
                 counts[binIdx]++;
         }
 
-        void print() const {
-                for (size_t i = 0; i < numBins; i++) {
-                      //  std::cout << i*width + minScore << "\t";
-                       // std::cout << (i+1)*width + minScore << "\t";
-                        std::cout << counts[i] << std::endl;
-                }
-        }
-
         /**
-         * Compute the average of the histogram
+         * Compute the weighted average of the observations
          */
         float getAverage() const;
 
@@ -134,7 +131,6 @@ public:
                            const std::string& baseFilename);
 };
 
-
 // ============================================================================
 // MOTIF
 // ============================================================================
@@ -152,18 +148,27 @@ public:
         /**
          * Default constructor
          */
-        Motif() : threshold(0.0), revComp(false) {}
+        Motif() : motifID(0), threshold(0.0f), revComp(false) {}
 
         /**
          * Default constructor
          * @param name Name of the motif
+         * @param motifID Motif identifier
          */
         Motif(const std::string& name, size_t motifID) : name(name),
-                motifID(motifID), threshold(0.0), revComp(false) {};
+                motifID(motifID), threshold(0.0f), revComp(false) {}
+
+        /**
+         * Get the name of the motif
+         * @return The name of the motif
+         */
+        const std::string& getName() const {
+                return name;
+        }
 
         /**
          * Get the motif identifier
-         * return The motif identifier
+         * @return The motif identifier
          */
         size_t getID() const {
                 return motifID;
@@ -178,6 +183,14 @@ public:
         }
 
         /**
+         * Get the motif score threshold
+         * @return Motif score threshold
+         */
+        float getThreshold() const {
+                return threshold;
+        }
+
+        /**
          * Add a character to the positoin frequency matrix (PFM)
          * @param c counts of the character to add
          */
@@ -188,14 +201,14 @@ public:
         /**
          * Convert a PFM into a PWM given background nucleotide counts
          * @param bgCounts Background nucleotide counts (ACTG)
-         * @param pseudoCounts Speudo counts for the *motif* PFM
+         * @param pseudoCounts Pseudo counts for both the motif PFM and bgCounts
          */
         void PFM2PWM(const std::array<size_t, 4>& bgCounts,
                      size_t pseudoCounts = 0);
 
         /**
-         * Get the length of a motif
-         * @return The length of a motif
+         * Get the size (= length) of a motif
+         * @return The size of a motif
          */
         size_t size() const {
                 return PFM.size();
@@ -210,16 +223,8 @@ public:
         }
 
         /**
-         * Get the name of the motif
-         * @return The name of the motif
-         */
-        const std::string& getName() const {
-                return name;
-        }
-
-        /**
          * Get the base name of the motif (with __XX for random permutations)
-         * @return The name of the motif
+         * @return The base name of the motif
          */
         std::string getBaseName() const {
                 std::string retval = name;
@@ -278,7 +283,7 @@ public:
         float getScore(const std::string& pattern) const;
 
         /**
-         * Set the motif cutoff threshold
+         * Set the motif score threshold
          * @param threshold_ Motif score threshold
          */
         void setThreshold(float threshold_) {
@@ -286,13 +291,9 @@ public:
         }
 
         /**
-         * Get the motif cutoff threshold
-         * @return Motif score threshold
+         * Operator< overloading based on size
+         * @return true of false
          */
-        float getThreshold() const {
-                return threshold;
-        }
-
         bool operator<(const Motif& rhs) const {
                 return size() < rhs.size();
         }
@@ -311,12 +312,10 @@ public:
 
 class MotifContainer {
 private:
-        std::vector<Motif> motifs;
-
-        Matrix<float> P;
-        std::vector<std::pair<size_t, size_t> > matBlock;
-
-        std::vector<size_t> col2MotifID;
+        std::vector<Motif> motifs;              // actual motifs
+        Matrix P;                               // pattern matrix
+        std::vector<std::pair<size_t, size_t> > matBlock;       // block structure of P
+        std::vector<size_t> col2MotifID;        // motif ID at column j in P
 
 public:
         /**
@@ -356,7 +355,7 @@ public:
          * Get a const-reference to matrix P
          * @return A const-reference to matrix P
          */
-        const Matrix<float>& getMatrix() const {
+        const Matrix& getMatrix() const {
                 return P;
         }
 

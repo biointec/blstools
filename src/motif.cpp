@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2017 Jan Fostier (jan.fostier@ugent.be)                 *
- *   This file is part of BLStools                                         *
+ *   Copyright (C) 2017-2018 Jan Fostier (jan.fostier@ugent.be)            *
+ *   This file is part of Blamm                                            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -184,7 +184,7 @@ float Motif::getScore(const std::string& pattern) const
         // make sure the pattern and motif have the same size
         assert (pattern.size() == size());
 
-        float score = 0.0;
+        float score = 0.0f;
         for (size_t i = 0; i < pattern.size(); i++) {
                 size_t j = char2idx(pattern[i]);
                 if (j < 4)      // if ACTG character
@@ -196,7 +196,7 @@ float Motif::getScore(const std::string& pattern) const
 
 float Motif::getMaxScore() const
 {
-        float maxScore = 0.0;
+        float maxScore = 0.0f;
 
         for (auto& pos : PWM) {
                 float maxAC = max<float>(pos[0], pos[1]);
@@ -209,7 +209,7 @@ float Motif::getMaxScore() const
 
 float Motif::getMinScore() const
 {
-        float minScore = 0.0;
+        float minScore = 0.0f;
 
         for (auto& pos : PWM) {
                 float minAC = min<float>(pos[0], pos[1]);
@@ -304,6 +304,8 @@ void MotifContainer::loadCBMotifs(const std::string& filename,
 
                 motifs.back().addCharacter({A, C, G, T});
         }
+
+        sort(motifs.begin(), motifs.end());
 }
 
 void MotifContainer::loadJasparMotifs(const std::string& filename,
@@ -347,9 +349,6 @@ void MotifContainer::loadJasparMotifs(const std::string& filename,
         }
 
         sort(motifs.begin(), motifs.end());
-
-        //for (auto it : motifs)
-        //        cout << it.size() << endl;
 }
 
 void MotifContainer::addReverseComplements()

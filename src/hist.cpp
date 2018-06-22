@@ -60,7 +60,7 @@ void Histogram::printUsage() const
         cout << "Report bugs to Jan Fostier <jan.fostier@ugent.be>\n";
 }
 
-void Histogram::extractObsScore(const Matrix<float>& R, size_t offset,
+void Histogram::extractObsScore(const Matrix& R, size_t offset,
                           const SeqMatrix& sm,
                           const MotifContainer& motifContainer,
                           vector<ScoreHistogram>& histContainer)
@@ -89,14 +89,14 @@ void Histogram::histThread(const MotifContainer& motifContainer,
         size_t W = 4*K;                 // choose freely
 
         // pattern matrix
-        const Matrix<float> &P = motifContainer.getMatrix();
+        const Matrix& P = motifContainer.getMatrix();
         const auto matBlock = motifContainer.getMatrixBlock();
 
         // sequence matrix
         SeqMatrix sm(K, overlap, W);
 
         // result matrix
-        Matrix<float> R(P.nRows(), W);
+        Matrix R(P.nRows(), W);
 
         while (sm.getNextSeqMatrix(seqBatch)) {
                 for (size_t offset = 0; offset < K; offset++) {

@@ -103,7 +103,7 @@ void PWMScan::writeOccToDisk(size_t speciesID,
         os << oss.str();
 }
 
-void PWMScan::extractOccurrences(const Matrix<float>& R, size_t offset,
+void PWMScan::extractOccurrences(const Matrix& R, size_t offset,
                                  SeqMatrix& sm,
                                  const MotifContainer& motifContainer,
                                  vector<MotifOccurrence>& motifOcc)
@@ -221,13 +221,13 @@ void PWMScan::scanThreadBLAS(size_t speciesID, const MotifContainer& motifContai
         size_t W = 4*K;                 // choose freely
 
         // pattern matrix
-        const Matrix<float> &P = motifContainer.getMatrix();
+        const Matrix &P = motifContainer.getMatrix();
 
         // sequence matrix
         SeqMatrix sm(W, K, overlap);
 
         // result matrix
-        Matrix<float> R(W, P.nCols());
+        Matrix R(W, P.nCols());
         const auto matBlock = motifContainer.getMatrixBlock();
 
         // sgemm batch parameters
@@ -256,7 +256,7 @@ void PWMScan::scanThreadBLAS(size_t speciesID, const MotifContainer& motifContai
                         for (size_t i = 0; i < matBlock.size(); i++)
                                 p.A_array[i] = sm.getData() + 4*offset*p.LDA[i];
 
-                        Matrix<float>::sgemm_batch(p);
+                        Matrix::sgemm_batch(p);
                         extractOccurrences(R, offset, sm, motifContainer, occurrences);
                 }
 

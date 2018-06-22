@@ -1,6 +1,6 @@
 /***************************************************************************
  *   Copyright (C) 2017-2018 Jan Fostier (jan.fostier@ugent.be)            *
- *   This file is part of BLStools                                         *
+ *   This file is part of Blamm                                            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -44,16 +44,6 @@ extern "C" void sgemm_f77(const char* transA, const char* transB,
                           const float* B, const int* LDB,
                           const float* beta,
                           float *C, const int* LDC);
-
-// ===========================================================================
-// TEMPLATE PROTOTYPES
-// ===========================================================================
-
-template <class T>
-class Matrix;
-
-template <class T>
-std::ostream& operator<<(std::ostream& os, const Matrix<T>& M);
 
 // ===========================================================================
 // SGEMM BATCH PARAMETERS
@@ -124,25 +114,21 @@ public:
 // MATRIX CLASS (Column major storage)
 // ===========================================================================
 
-/**
- * Generic template matrix class with some specialized functions for float types
- */
-template <class T>
 class Matrix
 {
 private:
         size_t rows;    // number of rows
         size_t cols;    // number of columns
-        T *data;        // actual storage for the elements
+        float *data;    // actual storage for the elements
 
         /**
          * Allocate memory for data
          */
         void allocateMemory() {
 #ifdef HAVE_MKL
-                data = (T*)mkl_malloc(rows*cols*sizeof(T), 64);
+                data = (float*)mkl_malloc(rows*cols*sizeof(float), 64);
 #else
-                data = new T[rows*cols];
+                data = new float[rows*cols];
 #endif
         }
 
@@ -182,7 +168,8 @@ public:
          * @param nCols Number of columns in the matrix
          * @param el Initializer object
          */
-        Matrix(size_t nRows, size_t nCols, const T& el) : Matrix(nRows, nCols) {
+        Matrix(size_t nRows, size_t nCols, float el) :
+                Matrix(nRows, nCols) {
                 fill(el);
         }
 
@@ -205,7 +192,7 @@ public:
          * @param nCols Number of columns in the matrix
          * @param el Initializer object
          */
-        void resize(size_t nRows, size_t nCols, const T& el) {
+        void resize(size_t nRows, size_t nCols, float el) {
                 assert(nRows > 0);
                 assert(nCols > 0);
 
@@ -223,7 +210,7 @@ public:
          * Fill the matrix with a certain element
          * @param el Element to fill the matrix with
          */
-        void fill(const T& el) {
+        void fill(const float& el) {
                 for (size_t i = 0; i < rows*cols; i++)
                         data[i] = el;
         }
@@ -250,7 +237,7 @@ public:
          * @param col Column specification
          * @return Reference to element at specified position
          */
-        T& operator()(size_t row, size_t col) {
+        float& operator()(size_t row, size_t col) {
                 return data[col*rows+row];
         }
 
@@ -260,7 +247,7 @@ public:
          * @param col Column specification
          * @return Const-reference to element at specified position
          */
-        const T& operator()(size_t row, size_t col) const {
+        const float& operator()(size_t row, size_t col) const {
                 return data[col*rows+row];
         }
 
@@ -268,7 +255,7 @@ public:
          * Get the data pointer
          * @return The data pointer
          */
-        T* getData() const {
+        float* getData() const {
                 return data;
         }
 
@@ -278,8 +265,7 @@ public:
          * @param M Matrix to print
          * @return Output stream with the matrix elements
          */
-        friend std::ostream& (::operator<< <>)(std::ostream& os,
-                                               const Matrix<T>& M);
+        friend std::ostream& (operator<<)(std::ostream& os, const Matrix& M);
 
         /**
          * Print the sequence imposed by the matrix
@@ -295,8 +281,9 @@ public:
         {
 #ifdef HAVE_MKL
                 cblas_sgemm_batch(CblasColMajor, p.trans, p.trans, p.m, p.n,
-                                  p.k, p.alpha, p.A_array, p.LDA, p.B_array, p.LDB, p.beta,
-                                  p.C_array, p.LDC, p.groupCount, p.groupSize);
+                                  p.k, p.alpha, p.A_array, p.LDA, p.B_array,
+                                  p.LDB, p.beta, p.C_array, p.LDC, p.groupCount,
+                                  p.groupSize);
 #else
                 for (int i = 0; i < p.groupCount; i++)
                         sgemm_f77("N", "N", &p.m[i], &p.n[i], &p.k[i],

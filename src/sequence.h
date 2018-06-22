@@ -321,7 +321,7 @@ public:
         size_t numRow;                  // number of rows
         size_t numOccRow;               // number of occupied rows
 
-        Matrix<float> S;                // actual matrix
+        Matrix S;                // actual matrix
         SeqBlock block;                 // sequence block
 
 public:

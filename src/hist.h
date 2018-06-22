@@ -32,8 +32,7 @@ class MotifContainer;
 class FastaBatch;
 class ScoreHistogram;
 class SeqMatrix;
-
-template <class T> class Matrix;
+class Matrix;
 
 // ============================================================================
 // HISTOGRAM MODULE
@@ -47,7 +46,7 @@ private:
          */
         void printUsage() const;
 
-        void extractObsScore(const Matrix<float>& R, size_t offset,
+        void extractObsScore(const Matrix& R, size_t offset,
                              const SeqMatrix& sm,
                              const MotifContainer& motifContainer,
                              std::vector<ScoreHistogram>& histContainer);
