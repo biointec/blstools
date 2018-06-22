@@ -382,7 +382,7 @@ void MotifContainer::generateMatrix()
                 col2MotifID.push_back(i);
         }
 
-        size_t numBlocks = 1;
+        size_t numBlocks = 10;
         for (size_t i = 0; i < numBlocks; i++) {
                 size_t start = (i == 0) ? 0 : matBlock[i-1].first;
                 size_t end = (i+1) * motifs.size() / numBlocks;

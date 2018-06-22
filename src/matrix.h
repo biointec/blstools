@@ -295,8 +295,8 @@ public:
         {
 #ifdef HAVE_MKL
                 cblas_sgemm_batch(CblasColMajor, p.trans, p.trans, p.m, p.n,
-                                  p.k, p.alpha, p.A, p.LDA, p.B, p.LDB, p.beta,
-                                  p.C, p.LDC, p.groupCount, p.groupSize);
+                                  p.k, p.alpha, p.A_array, p.LDA, p.B_array, p.LDB, p.beta,
+                                  p.C_array, p.LDC, p.groupCount, p.groupSize);
 #else
                 for (int i = 0; i < p.groupCount; i++)
                         sgemm_f77("N", "N", &p.m[i], &p.n[i], &p.k[i],

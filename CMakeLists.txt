@@ -24,6 +24,11 @@ add_definitions("-DBLSTOOLS_MAJOR_VERSION=${${PROJECT_NAME}_MAJOR_VERSION}")
 add_definitions("-DBLSTOOLS_MINOR_VERSION=${${PROJECT_NAME}_MINOR_VERSION}")
 add_definitions("-DBLSTOOLS_PATCH_LEVEL=${${PROJECT_NAME}_PATCH_LEVEL}")
 
+# set the MKL definition
+if (HAVE_MKL)
+	add_definitions("-DHAVE_MKL")
+endif (HAVE_MKL)
+
 # uncomment the portion below to disable assertions                                                                                                                                                               
 if (CMAKE_BUILD_TYPE STREQUAL Release)                                                                                                                                                                            
         add_definitions(-DNDEBUG)
