@@ -281,7 +281,7 @@ public:
         {
 #ifdef HAVE_MKL
                 cblas_sgemm_batch(CblasColMajor, p.trans, p.trans, p.m, p.n,
-                                  p.k, p.alpha, p.A_array, p.LDA, p.B_array,
+                                  p.k, p.alpha, (const float**)p.A_array, p.LDA, (const float**)p.B_array,
                                   p.LDB, p.beta, p.C_array, p.LDC, p.groupCount,
                                   p.groupSize);
 #else
