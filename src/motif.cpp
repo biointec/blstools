@@ -363,10 +363,10 @@ void MotifContainer::addReverseComplements()
         }
 }
 
-std::pair<MatrixTile, MatrixTile> MotifContainer::findBestSplit(MatrixTile input)
+TilePair MotifContainer::findBestSplit(const MatrixTile& input)
 {
         size_t bestZeroArea = 0;
-        size_t bestJ = 0;
+        size_t bestJ = input.colStart + 1;
 
         for (size_t j = input.colStart + 1; j < input.colEnd; j++) {
                 size_t numCols = j - input.colStart;
@@ -385,6 +385,42 @@ std::pair<MatrixTile, MatrixTile> MotifContainer::findBestSplit(MatrixTile input
         return make_pair(left, right);
 }
 
+bool MotifContainer::keepSplit(const TilePair& tilePair)
+{
+        const size_t minSize = 32;
+        const size_t minArea = 128*128;
+        const double minZeroFrac = 0.10;
+
+        const MatrixTile& f = tilePair.first;
+        const MatrixTile& s = tilePair.second;
+
+        size_t origArea = (s.rowEnd-f.rowStart) * (s.colEnd-f.colStart);
+        size_t area1 = (f.rowEnd-f.rowStart) * (f.colEnd-f.colStart);
+        size_t area2 = (s.rowEnd-s.rowStart) * (s.colEnd-s.colStart);
+
+        // check the minimum matrix dimensions
+        if (f.colEnd - f.colStart < minSize)
+                return false;
+        if (f.rowEnd - f.rowStart < minSize)
+                return false;
+        if (s.colEnd - s.colStart < minSize)
+                return false;
+        if (s.rowEnd - s.rowStart < minSize)
+                return false;
+
+        // check the minimum area
+        if (area1 < minArea)
+                return false;
+        if (area2 < minArea)
+                return false;
+
+        // check the relative area gain
+        if (double(area1 + area2)/double(origArea) > (1.0-minZeroFrac))
+                return false;
+
+        return true;
+}
+
 void MotifContainer::generateMatrix()
 {
         // allocate memory for matrix P
@@ -392,6 +428,8 @@ void MotifContainer::generateMatrix()
         size_t k = 4 * getMaxMotifLen();
 
         P.resize(k, m, 0.0f);
+
+        cout << "Matrix P has dimensions: " << k << " x " << m << endl;
 
         // fill the matrix
         for (size_t i = 0; i < motifs.size(); i++) {
@@ -403,75 +441,54 @@ void MotifContainer::generateMatrix()
                 col2MotifID.push_back(i);
         }
 
-        // compute the non-zero fraction
-        size_t nonZeroElements = 0;
-        for (size_t i = 0; i < P.nCols(); i++)
-                nonZeroElements += 4 * motifs[i].size();
-
-        double nonZeroFrac = (double)nonZeroElements / (double)(P.nRows() * P.nCols());
-        cout << "Non-zero fraction: " << nonZeroFrac << endl;
-
-        vector<MatrixTile> matrixTiles;
         matrixTiles.push_back(MatrixTile(0, 0, P.nRows(), P.nCols()));
-        for (size_t i = 0; i < 3; i++) {
-                vector<MatrixTile> origTiles = matrixTiles;
-                matrixTiles.clear();
+        while (true) {
+                vector<MatrixTile> newTiles;
+                bool didSomething = false;
 
-                for (auto it : origTiles) {
+                for (const auto& it : matrixTiles) {
                         auto res = findBestSplit(it);
-                        matrixTiles.push_back(res.first);
-                        matrixTiles.push_back(res.second);
 
-                        cout << "I split " << it << " into " << res.first << " and " << res.second << endl;
+                        if (keepSplit(res)) {
+                                // keep the split
+                                didSomething = true;
+                                newTiles.push_back(res.first);
+                                newTiles.push_back(res.second);
+                        } else {
+                                // keep the original
+                                newTiles.push_back(it);
+                        }
                 }
 
-                size_t thisNonZeroElements = 0;
-                for (const auto& it : matrixTiles)
-                        thisNonZeroElements += it.getArea();
+                matrixTiles = newTiles;
 
-                double thisNonZeroFrac = (double)thisNonZeroElements / (double)(P.nRows() * P.nCols());
-                cout << "This non-zero fraction: " << thisNonZeroFrac << endl;
+                if (!didSomething)
+                        break;
         }
 
-        for (const auto& it : matrixTiles) {
-                matBlock.push_back(make_pair(it.colEnd, it.rowEnd));
-        }
+        auto oldPrecision = cout.precision();
+        cout.precision(2);
 
-        //cout << "Best zero area: " << bestZeroArea << ", best j" << bestJ << endl;
-        //cout << "Fraction saved: " << (float)bestZeroArea / float(P.nRows() * P.nCols()) << endl;
+        // compute the zero fraction
+        size_t zeroElements = 0;
+        for (size_t i = 0; i < P.nCols(); i++)
+                zeroElements += P.nRows() - 4 * motifs[i].size();
 
-        /*size_t numBlocks = 10;
-        for (size_t i = 0; i < numBlocks; i++) {
-                size_t start = (i == 0) ? 0 : matBlock[i-1].first;
-                size_t end = (i+1) * motifs.size() / numBlocks;
+        double zeroFrac = (double)zeroElements / (double)(P.nRows() * P.nCols());
+        cout << "Matrix P initially contains " << 100.0*zeroFrac << "% zeros\n";
+        cout << "Matrix P has been partitioned into " << matrixTiles.size() << " tile(s):\n";
 
-                size_t width = 0;
-                for (size_t j = start; j < end; j++)
-                        width = max(width, 4*motifs[j].size());
+        for (const auto& it : matrixTiles)
+                cout << "\t" << it << "\n";
 
-                matBlock.push_back(make_pair(end, width));
-        }*/
+        for (const auto& it : matrixTiles)
+                zeroElements -= (P.nRows() - it.rowEnd) * (it.colEnd - it.colStart);
+        zeroFrac = (double)zeroElements / (double)(P.nRows() * P.nCols());
+        cout << "Tiled matrix P contains " << 100.0*zeroFrac << "% zeros\n";
 
-        size_t area = 0;
-        for (size_t i = 0; i < matBlock.size(); i++) {
-                size_t start = (i == 0) ? 0 : matBlock[i-1].first;
-                size_t end = matBlock[i].first;
+        cout.precision(oldPrecision);
 
-                cout << "From: " << start << " to " << end << " width: " << matBlock[i].second << endl;
-                area += 4 * (end - start) * matBlock[i].second;
-        }
-
-        size_t orig = 4 * motifs.size() * matBlock.back().second;
-        cout << "Area: " << area << " versus " << orig << endl;
-        cout << "Ratio: " << 100.0 * area / orig << endl;
-
-        /*vector<size_t> height(4*getMaxMotifLen(), 0);
-        for (size_t i = 0; i < motifs.size(); i++)
-                for (size_t j = 0; j < 4*motifs[i].size(); j++)
-                        height[j]++;
-
-        // FIXME :DELETE ME
-        ofstream ofs("hist.dat");
+        /*ofstream ofs("hist.dat");
         for (size_t i = 0; i < height.size(); i++)
                 ofs << i+1 << "\t" << height[i] << "\n";*/
 }

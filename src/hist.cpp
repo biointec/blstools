@@ -90,7 +90,7 @@ void Histogram::histThread(const MotifContainer& motifContainer,
 
         // pattern matrix
         const Matrix& P = motifContainer.getMatrix();
-        const auto matBlock = motifContainer.getMatrixBlock();
+        const auto matBlock = motifContainer.getMatrixTiles();
 
         // sequence matrix
         SeqMatrix sm(K, overlap, W);

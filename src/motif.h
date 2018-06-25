@@ -352,8 +352,10 @@ public:
          * @param m Matrix tile
          */
         friend std::ostream& operator<< (std::ostream& os, const MatrixTile& m) {
-                os << "(" << m.rowStart << "-" << m.colStart << ") -- "
-                   << "(" << m.rowEnd << "-" << m.colEnd << ")";
+                os << "motif [" << m.colStart << " - " << m.colEnd << "[ -- max. length = " << m.rowEnd;
+
+                /*"(" << m.rowStart << "-" << m.colStart << ") -- "
+                   << "(" << m.rowEnd << "-" << m.colEnd << ")";*/
                 return os;
         }
 };
@@ -362,19 +364,27 @@ public:
 // MOTIF CONTAINER
 // ============================================================================
 
+typedef std::pair<MatrixTile, MatrixTile> TilePair;
+
 class MotifContainer {
 private:
-
         /**
          * Given an input matrix tile, compute the optimal split
          * @param input Input matrix tile
          * @return Two output tiles
          */
-        std::pair<MatrixTile, MatrixTile> findBestSplit(MatrixTile input);
+        TilePair findBestSplit(const MatrixTile& input);
+
+        /**
+         * Keep/reject a split
+         * @param tilePair Two input tiles
+         * @return True or false
+         */
+        bool keepSplit(const TilePair& tilePair);
 
         std::vector<Motif> motifs;              // actual motifs
         Matrix P;                               // pattern matrix
-        std::vector<std::pair<size_t, size_t> > matBlock;       // block structure of P
+        std::vector<MatrixTile> matrixTiles;    // block structor of P
         std::vector<size_t> col2MotifID;        // motif ID at column j in P
 
 public:
@@ -420,11 +430,11 @@ public:
         }
 
         /**
-         * Get a const-reference to a matrix block
-         * @return A const-reference to a matrix block
+         * Get a const-reference to the matrix tiles
+         * @return A const-reference to the matrix tiles
          */
-        const std::vector<std::pair<size_t, size_t> >& getMatrixBlock() const {
-                return matBlock;
+        const std::vector<MatrixTile>& getMatrixTiles() const {
+                return matrixTiles;
         }
 
         /**

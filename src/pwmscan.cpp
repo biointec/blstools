@@ -228,32 +228,28 @@ void PWMScan::scanThreadBLAS(size_t speciesID, const MotifContainer& motifContai
 
         // result matrix
         Matrix R(W, P.nCols());
-        const auto matBlock = motifContainer.getMatrixBlock();
 
         // sgemm batch parameters
-        SgemmBatchParams p(matBlock.size());
+        const auto matrixTiles = motifContainer.getMatrixTiles();
+        SgemmBatchParams p(matrixTiles.size());
 
-        for (size_t i = 0; i < matBlock.size(); i++) {
-                size_t colStart = (i == 0) ? 0 : matBlock[i-1].first;
-                size_t colEnd = matBlock[i].first;
-
+        for (size_t i = 0; i < matrixTiles.size(); i++) {
                 p.m[i] = W;
-                p.k[i] = matBlock[i].second;
-                p.n[i] = colEnd-colStart;
+                p.k[i] = matrixTiles[i].rowEnd;
+                p.n[i] = matrixTiles[i].colEnd-matrixTiles[i].colStart;
                 p.LDA[i] = W;
                 p.LDB[i] = P.nRows();
                 p.LDC[i] = W;
                 p.alpha[i] = 1.0f;
                 p.beta[i] = 0.0f;
-                p.B_array[i] = P.getData() + colStart*p.LDB[i];
-                p.C_array[i] = R.getData() + colStart*p.LDC[i];
+                p.B_array[i] = P.getData() + matrixTiles[i].colStart*p.LDB[i];
+                p.C_array[i] = R.getData() + matrixTiles[i].colStart*p.LDC[i];
         }
 
         vector<MotifOccurrence> occurrences;
-
         while (sm.getNextSeqMatrix(seqBatch)) {
                 for (size_t offset = 0; offset < K; offset++) {
-                        for (size_t i = 0; i < matBlock.size(); i++)
+                        for (size_t i = 0; i < matrixTiles.size(); i++)
                                 p.A_array[i] = sm.getData() + 4*offset*p.LDA[i];
 
                         Matrix::sgemm_batch(p);
