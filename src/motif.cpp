@@ -363,6 +363,28 @@ void MotifContainer::addReverseComplements()
         }
 }
 
+std::pair<MatrixTile, MatrixTile> MotifContainer::findBestSplit(MatrixTile input)
+{
+        size_t bestZeroArea = 0;
+        size_t bestJ = 0;
+
+        for (size_t j = input.colStart + 1; j < input.colEnd; j++) {
+                size_t numCols = j - input.colStart;
+                size_t numRows = input.rowEnd - 4*motifs[j-1].size();
+                size_t zeroArea = numCols * numRows;
+
+                if (zeroArea > bestZeroArea) {
+                        bestZeroArea = zeroArea;
+                        bestJ = j;
+                }
+        }
+
+        MatrixTile left(input.rowStart, input.colStart, 4*motifs[bestJ-1].size(), bestJ);
+        MatrixTile right(input.rowStart, bestJ, input.rowEnd, input.colEnd);
+
+        return make_pair(left, right);
+}
+
 void MotifContainer::generateMatrix()
 {
         // allocate memory for matrix P
@@ -381,7 +403,44 @@ void MotifContainer::generateMatrix()
                 col2MotifID.push_back(i);
         }
 
-        size_t numBlocks = 10;
+        // compute the non-zero fraction
+        size_t nonZeroElements = 0;
+        for (size_t i = 0; i < P.nCols(); i++)
+                nonZeroElements += 4 * motifs[i].size();
+
+        double nonZeroFrac = (double)nonZeroElements / (double)(P.nRows() * P.nCols());
+        cout << "Non-zero fraction: " << nonZeroFrac << endl;
+
+        vector<MatrixTile> matrixTiles;
+        matrixTiles.push_back(MatrixTile(0, 0, P.nRows(), P.nCols()));
+        for (size_t i = 0; i < 3; i++) {
+                vector<MatrixTile> origTiles = matrixTiles;
+                matrixTiles.clear();
+
+                for (auto it : origTiles) {
+                        auto res = findBestSplit(it);
+                        matrixTiles.push_back(res.first);
+                        matrixTiles.push_back(res.second);
+
+                        cout << "I split " << it << " into " << res.first << " and " << res.second << endl;
+                }
+
+                size_t thisNonZeroElements = 0;
+                for (const auto& it : matrixTiles)
+                        thisNonZeroElements += it.getArea();
+
+                double thisNonZeroFrac = (double)thisNonZeroElements / (double)(P.nRows() * P.nCols());
+                cout << "This non-zero fraction: " << thisNonZeroFrac << endl;
+        }
+
+        for (const auto& it : matrixTiles) {
+                matBlock.push_back(make_pair(it.colEnd, it.rowEnd));
+        }
+
+        //cout << "Best zero area: " << bestZeroArea << ", best j" << bestJ << endl;
+        //cout << "Fraction saved: " << (float)bestZeroArea / float(P.nRows() * P.nCols()) << endl;
+
+        /*size_t numBlocks = 10;
         for (size_t i = 0; i < numBlocks; i++) {
                 size_t start = (i == 0) ? 0 : matBlock[i-1].first;
                 size_t end = (i+1) * motifs.size() / numBlocks;
@@ -391,10 +450,10 @@ void MotifContainer::generateMatrix()
                         width = max(width, 4*motifs[j].size());
 
                 matBlock.push_back(make_pair(end, width));
-        }
+        }*/
 
         size_t area = 0;
-        for (size_t i = 0; i < numBlocks; i++) {
+        for (size_t i = 0; i < matBlock.size(); i++) {
                 size_t start = (i == 0) ? 0 : matBlock[i-1].first;
                 size_t end = matBlock[i].first;
 

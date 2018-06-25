@@ -307,11 +307,71 @@ public:
 };
 
 // ============================================================================
+// MATRIX CHUNK
+// ============================================================================
+
+class MatrixTile {
+public:
+        size_t rowStart;
+        size_t colStart;
+        size_t rowEnd;
+        size_t colEnd;
+
+        /**
+         * Default constructor
+         */
+        MatrixTile() : rowStart(0), colStart(0), rowEnd(0), colEnd(0) {}
+
+        /**
+         * Constructor with element initialization
+         * @param rowStart start row
+         * @param colStart start column
+         * @param rowEnd end row
+         * @param colEnd end column
+         */
+        MatrixTile(size_t rowStart, size_t colStart, size_t rowEnd,
+                   size_t colEnd) : rowStart(rowStart), colStart(colStart),
+                   rowEnd(rowEnd), colEnd(colEnd) {}
+
+        /**
+         * Operator < overloading
+         * @param rhs Right hand side object
+         * @return True of false
+         */
+        bool operator< (const MatrixTile& rhs) {
+                return rowStart < rhs.rowStart;
+        }
+
+        size_t getArea() const {
+                return (rowEnd-rowStart) * (colEnd-colStart);
+        }
+
+        /**
+         * operator<< overloading
+         * @param os Output stream
+         * @param m Matrix tile
+         */
+        friend std::ostream& operator<< (std::ostream& os, const MatrixTile& m) {
+                os << "(" << m.rowStart << "-" << m.colStart << ") -- "
+                   << "(" << m.rowEnd << "-" << m.colEnd << ")";
+                return os;
+        }
+};
+
+// ============================================================================
 // MOTIF CONTAINER
 // ============================================================================
 
 class MotifContainer {
 private:
+
+        /**
+         * Given an input matrix tile, compute the optimal split
+         * @param input Input matrix tile
+         * @return Two output tiles
+         */
+        std::pair<MatrixTile, MatrixTile> findBestSplit(MatrixTile input);
+
         std::vector<Motif> motifs;              // actual motifs
         Matrix P;                               // pattern matrix
         std::vector<std::pair<size_t, size_t> > matBlock;       // block structure of P
