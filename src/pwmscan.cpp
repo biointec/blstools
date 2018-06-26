@@ -289,9 +289,6 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
                                const MotifContainer& motifContainer,
                                FastaBatch& seqBatch)
 {
-        const float alpha = 1.0f;
-        const float beta = 0.0f;
-
         float *d_P = 0, *d_S = 0, *d_R = 0;
         float *d_threshold = 0, *d_occScore = 0;
 
@@ -312,7 +309,7 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
         const Matrix& P = motifContainer.getMatrix();
         if (cudaMalloc((void **)&d_P, P.nRows() * P.nCols() * sizeof(float)) != cudaSuccess)
                 throw runtime_error("Cannot allocate memory on CUDA device\n");
-        cublasSetVector(P.nRows() * P.nCols(), sizeof(float), P.data, 1, d_P, 1);
+        cublasSetVector(P.nRows() * P.nCols(), sizeof(float), P.getData(), 1, d_P, 1);
 
         // sequence matrix
         SeqMatrix sm(h, w, overlap);
@@ -377,11 +374,11 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
 
         while (sm.getNextSeqMatrix(seqBatch)) {
                 // copy the sequence matrix to the device
-                cublasSetVector(4*(w + overlap)*h, sizeof(float), sm.S.data, 1, d_S, 1);
+                cublasSetVector(4*(w + overlap)*h, sizeof(float), sm.S.getData(), 1, d_S, 1);
 
                 for (size_t offset = 0; offset < w; offset++) {
                         for (size_t i = 0; i < matrixTiles.size(); i++)
-                                p.A_array[i] = sm.S.data + 4*offset*p.LDA[i];
+                                p.A_array[i] = sm.S.getData() + 4*offset*p.LDA[i];
 
                         Matrix::sgemm_batch_cuda(handle, p);
                         kernel_wrapper(d_R, R.nRows(), R.nCols(), d_threshold,
@@ -391,7 +388,7 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
                         offset_v[offset] = nOcc - prevOcc;
 
                         // don't retreive vector yet if insufficient results are on the GPU
-                        if ( (nOcc <= R.nRows() * R.nCols()) && (offset < w-1) )
+                        if ( (nOcc <= int(R.nRows() * R.nCols())) && (offset < w-1) )
                                 continue;
 
                         // get the results
