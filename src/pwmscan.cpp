@@ -136,35 +136,36 @@ void PWMScan::extractOccurrences(const Matrix& R, size_t offset,
         }
 }
 
-void extractOccurrences2(int m, const map<int, int>& offset_v, int *occIdx, float *occScore,
-			 SeqMatrix& sm, const MotifContainer& motifContainer,
-			 vector<MotifOccurrence>& motifOcc)
+void extractOccurrences2(int m, const map<int, int>& offset_v, int *occIdx,
+                         float *occScore, SeqMatrix& sm,
+                         const MotifContainer& motifContainer,
+                         vector<MotifOccurrence>& motifOcc)
 {
-	int idx = 0;
-	for (const auto& it: offset_v) {
-		int offset = it.first;
-		int thisOcc = it.second;
+        int idx = 0;
+        for (const auto& it: offset_v) {
+                int offset = it.first;
+                int thisOcc = it.second;
 
-		for (int c = 0; c < thisOcc; c++, idx++) {
-			float thisScore = occScore[idx];
-			int i = occIdx[idx] % m;
-			int j = occIdx[idx] / m;
+                for (int c = 0; c < thisOcc; c++, idx++) {
+                        float thisScore = occScore[idx];
+                        int i = occIdx[idx] % m;        // row in R
+                        int j = occIdx[idx] / m;        // col in R
 
-			size_t motifIdx = motifContainer.getMotifIDAtCol(i);
-	                const Motif& m = motifContainer[motifIdx];
+                        size_t motifIdx = motifContainer.getMotifIDAtCol(j);
+                        const Motif& m = motifContainer[motifIdx];
 
-        	        SeqPos seqPos = sm.getSeqPos(offset, j);
-	                size_t remSeqLen = sm.getRemainingSeqLen(offset, j);
+                        SeqPos seqPos = sm.getSeqPos(i, offset);
+                        size_t remSeqLen = sm.getRemainingSeqLen(i, offset);
 
-        	        if (m.size() > remSeqLen)
-				continue;
+                        if (m.size() > remSeqLen)
+                                continue;
 
-			char strand = m.isRevCompl() ? '-' : '+';
+                        char strand = m.isRevCompl() ? '-' : '+';
 
-        	        motifOcc.push_back(MotifOccurrence(m.getID(), 0, seqPos.getSeqIndex(),
-                                           seqPos.getSeqPos(), strand, thisScore));
-		}
-	}
+                        motifOcc.push_back(MotifOccurrence(m.getID(), 0, seqPos.getSeqIndex(),
+                                                           seqPos.getSeqPos(), strand, thisScore));
+                }
+        }
 }
 
 void PWMScan::scanThreadNaive(size_t speciesID, const MotifContainer& motifContainer,
@@ -222,7 +223,7 @@ void PWMScan::scanThreadBLAS(size_t speciesID,
         size_t h = settings.matrix_S_h;
 
         // pattern matrix
-        const Matrix &P = motifContainer.getMatrix();
+        const Matrix& P = motifContainer.getMatrix();
 
         // sequence matrix
         SeqMatrix sm(h, w, overlap);
@@ -297,8 +298,8 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
         int *d_occIdx = 0, *d_nOcc = 0;
 
         size_t overlap = motifContainer.getMaxMotifLen() - 1;
-        size_t K = 250;                 // choose freely
-        size_t W = 4*K;                 // choose freely
+        size_t w = settings.matrix_S_w;
+        size_t h = settings.matrix_S_h;
 
         // set CUDA device for this thread
         cudaSetDevice(devID);
@@ -308,41 +309,41 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
         cublasCreate(&handle);
 
         // pattern matrix
-        const Matrix<float> &P = motifContainer.getMatrix();
+        const Matrix& P = motifContainer.getMatrix();
         if (cudaMalloc((void **)&d_P, P.nRows() * P.nCols() * sizeof(float)) != cudaSuccess)
                 throw runtime_error("Cannot allocate memory on CUDA device\n");
         cublasSetVector(P.nRows() * P.nCols(), sizeof(float), P.data, 1, d_P, 1);
 
         // sequence matrix
-        SeqMatrix sm(K, overlap, W);
-        if (cudaMalloc((void **)&d_S, 4 * (K + overlap) * W * sizeof(float)) != cudaSuccess)
+        SeqMatrix sm(h, w, overlap);
+        if (cudaMalloc((void **)&d_S, 4*(w + overlap) * h * sizeof(float)) != cudaSuccess)
                 throw runtime_error("Cannot allocate memory on CUDA device\n");
 
         // result matrix
-        Matrix<float> R(P.nRows(), W);
+        Matrix R(h, P.nCols());
         if (cudaMalloc((void **)&d_R, R.nRows() * R.nCols() * sizeof(float)) != cudaSuccess)
                 throw runtime_error("Cannot allocate memory on CUDA device\n");
 
         // set the thresholds
-        float *threshold = new float[R.nRows()];
-        for (size_t i = 0; i < R.nRows(); i++) {
-                size_t motifID = motifContainer.getMotifIDAtRow(i);
+        float *threshold = new float[R.nCols()];
+        for (size_t i = 0; i < R.nCols(); i++) {
+                size_t motifID = motifContainer.getMotifIDAtCol(i);
                 const Motif& m = motifContainer[motifID];
                 threshold[i] = m.getThreshold();
         }
 
-        if (cudaMalloc((void **)&d_threshold, R.nRows() * sizeof(float)) != cudaSuccess)
+        if (cudaMalloc((void **)&d_threshold, R.nCols() * sizeof(float)) != cudaSuccess)
                 throw runtime_error("Cannot allocate memory on CUDA device\n");
-        cublasSetVector(R.nRows(), sizeof(float), threshold, 1, d_threshold, 1);
+        cublasSetVector(R.nCols(), sizeof(float), threshold, 1, d_threshold, 1);
         delete [] threshold;
 
         // data structures for the occurrences
         vector<MotifOccurrence> occurrences;
-        float *occScore = new float[2*R.nRows() * R.nCols()];
+        float *occScore = new float[2 * R.nRows() * R.nCols()];
         if (cudaMalloc((void **)&d_occScore, 2 * R.nRows() * R.nCols() * sizeof(float)) != cudaSuccess)
                 throw runtime_error("Cannot allocate memory on CUDA device\n");
 
-        int *occIdx = new int[2*R.nRows() * R.nCols()];
+        int *occIdx = new int[2 * R.nRows() * R.nCols()];
         if (cudaMalloc((void **)&d_occIdx, 2 * R.nRows() * R.nCols() * sizeof(int)) != cudaSuccess)
                 throw runtime_error("Cannot allocate memory on CUDA device\n");
 
@@ -351,62 +352,72 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
                 throw runtime_error("Cannot allocate memory on CUDA device\n");
         cublasSetVector(1, sizeof(int), &nOcc, 1, d_nOcc, 1);
 
-	const auto matBlock = motifContainer.getMatrixBlock();
+        // set the BLAS parameters
+        const auto matrixTiles = motifContainer.getMatrixTiles();
+        SgemmBatchParams p(matrixTiles.size());
+
+        for (size_t i = 0; i < matrixTiles.size(); i++) {
+                p.m[i] = h;
+                p.k[i] = matrixTiles[i].rowEnd;
+                p.n[i] = matrixTiles[i].colEnd-matrixTiles[i].colStart;
+                p.LDA[i] = h;
+                p.LDB[i] = P.nRows();
+                p.LDC[i] = h;
+                p.alpha[i] = 1.0f;
+                p.beta[i] = 0.0f;
+                p.B_array[i] = d_P + matrixTiles[i].colStart*p.LDB[i];
+                p.C_array[i] = d_R + matrixTiles[i].colStart*p.LDC[i];
+        }
 
         map<int, int> offset_v;
 
-	size_t nOutputTasks = 10;	// FIXME: derive from available number of threads
-	vector<future<void> > outputTask(nOutputTasks);
-	size_t currOutputTask = 0;
+        size_t nOutputTasks = 10;       // FIXME: derive from available number of threads
+        vector<future<void> > outputTask(nOutputTasks);
+        size_t currOutputTask = 0;
 
-	while (sm.getNextSeqMatrix(seqBatch)) {
-		cublasSetVector(4 * (K + overlap) * W, sizeof(float), sm.S.data, 1, d_S, 1);
+        while (sm.getNextSeqMatrix(seqBatch)) {
+                // copy the sequence matrix to the device
+                cublasSetVector(4*(w + overlap)*h, sizeof(float), sm.S.data, 1, d_S, 1);
 
-                for (size_t offset = 0; offset < K; offset++) {
+                for (size_t offset = 0; offset < w; offset++) {
+                        for (size_t i = 0; i < matrixTiles.size(); i++)
+                                p.A_array[i] = sm.S.data + 4*offset*p.LDA[i];
 
-		        for (size_t i = 0; i < matBlock.size(); i++) {
-		                size_t start = (i == 0) ? 0 : matBlock[i-1].first;
-                		size_t end = matBlock[i].first;
+                        Matrix::sgemm_batch_cuda(handle, p);
+                        kernel_wrapper(d_R, R.nRows(), R.nCols(), d_threshold,
+                                       d_occIdx, d_occScore, d_nOcc);
+                        int prevOcc = nOcc;
+                        cublasGetVector(1, sizeof(int), d_nOcc, 1, &nOcc, 1);
+                        offset_v[offset] = nOcc - prevOcc;
 
-		                int m = end-start;
-                		int k = matBlock[i].second;
+                        // don't retreive vector yet if insufficient results are on the GPU
+                        if ( (nOcc <= R.nRows() * R.nCols()) && (offset < w-1) )
+                                continue;
 
-				cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, R.nCols(), P.nCols(), &alpha, d_P + start, P.nRows(), d_S + 4 * offset, sm.S.nRows(), &beta, d_R + start, R.nRows());
-			}
-			//cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, R.nRows(), R.nCols(), P.nCols(), &alpha, d_P, P.nRows(), d_S + 4 * offset, sm.S.nRows(), &beta, d_R, R.nRows());
-			kernel_wrapper(d_R, R.nRows(), R.nCols(), d_threshold, d_occIdx, d_occScore, d_nOcc);
-			int prevOcc = nOcc;
-			cublasGetVector(1, sizeof(int), d_nOcc, 1, &nOcc, 1);
-			offset_v[offset] = nOcc - prevOcc;
-
-			// don't retreive vector just yet if insufficient results are on the GPU
-			if ( (nOcc <= R.nRows() * R.nCols()) && (offset < K-1) )
-				continue;
-
-			// get the results
-			cublasGetVector(nOcc, sizeof(float), d_occScore, 1, occScore, 1);
-			cublasGetVector(nOcc, sizeof(int), d_occIdx, 1, occIdx, 1);
-			extractOccurrences2(R.nRows(), offset_v, occIdx, occScore, sm, motifContainer, occurrences);
-			offset_v.clear();
-			nOcc = 0;
-			cublasSetVector(1, sizeof(int), &nOcc, 1, d_nOcc, 1);
+                        // get the results
+                        cublasGetVector(nOcc, sizeof(float), d_occScore, 1, occScore, 1);
+                        cublasGetVector(nOcc, sizeof(int), d_occIdx, 1, occIdx, 1);
+                        extractOccurrences2(R.nRows(), offset_v, occIdx, occScore, sm, motifContainer, occurrences);
+                        offset_v.clear();
+                        nOcc = 0;
+                        cublasSetVector(1, sizeof(int), &nOcc, 1, d_nOcc, 1);
                 }
 
-		// write the output to disk
-		if (outputTask[currOutputTask].valid())
-			outputTask[currOutputTask].get();
-		outputTask[currOutputTask] = async(launch::async, &PWMScan::writeOccToDisk, this, speciesID, cref(occurrences));
-		currOutputTask = (currOutputTask + 1) % nOutputTasks;
+                // write the output to disk
+                if (outputTask[currOutputTask].valid())
+                        outputTask[currOutputTask].get();
+                outputTask[currOutputTask] = async(launch::async, &PWMScan::writeOccToDisk, this, speciesID, cref(occurrences));
+                currOutputTask = (currOutputTask + 1) % nOutputTasks;
 
                 occurrences.clear();
 
                 cout << "."; cout.flush();
         }
 
-	// wait for all output to be written
-	for (size_t i = 0; i < outputTask.size(); i++)
-		if (outputTask[i].valid())
-			outputTask[i].get();
+        // wait for all output to be written
+        for (size_t i = 0; i < outputTask.size(); i++)
+                if (outputTask[i].valid())
+                        outputTask[i].get();
 
         delete [] occIdx;
         delete [] occScore;
@@ -442,8 +453,8 @@ void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContain
         // start one thread per GPU device
         vector<thread> workerThreads(numDevices);
         for (size_t i = 0; i < workerThreads.size(); i++)
-                workerThreads[i] = thread(&PWMScan::scanThreadCUBLAS, this, i, speciesID,
-                                          cref(motifContainer),
+                workerThreads[i] = thread(&PWMScan::scanThreadCUBLAS, this, i,
+                                          speciesID, cref(motifContainer),
                                           ref(seqBatch));
 
         // wait for worker threads to finish

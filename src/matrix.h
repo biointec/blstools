@@ -30,6 +30,12 @@
         #include "mkl.h"
 #endif
 
+#ifdef HAVE_CUDA
+        #include <cuda_runtime.h>
+        #include <cublas_v2.h>
+        #include "helper_cuda.h"
+#endif
+
 // ============================================================================
 // BLAS SINGLE/DOUBLE PRECISION FUNCTION PROTOTYPES
 // ============================================================================
@@ -281,9 +287,9 @@ public:
         {
 #ifdef HAVE_MKL
                 cblas_sgemm_batch(CblasColMajor, p.trans, p.trans, p.m, p.n,
-                                  p.k, p.alpha, (const float**)p.A_array, p.LDA, (const float**)p.B_array,
-                                  p.LDB, p.beta, p.C_array, p.LDC, p.groupCount,
-                                  p.groupSize);
+                                  p.k, p.alpha, (const float**)p.A_array, p.LDA,
+                                  (const float**)p.B_array, p.LDB, p.beta,
+                                  p.C_array, p.LDC, p.groupCount, p.groupSize);
 #else
                 for (int i = 0; i < p.groupCount; i++)
                         sgemm_f77("N", "N", &p.m[i], &p.n[i], &p.k[i],
@@ -292,6 +298,25 @@ public:
                                   p.C_array[i], &p.LDC[i]);
 #endif
         }
+
+#ifdef HAVE_CUDA
+        /**
+         * Perform batch matrix-matrix multiplications
+         * @param handle cublas handle
+         * @param p sgemm batch paramters
+         */
+        static void sgemm_batch_cuda(cublasHandle_t handle,
+                                     const SgemmBatchParams& p)
+        {
+                for (int i = 0; i < p.groupCount; i++)
+                        cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, p.m[i],
+                                    p.n[i], p.k[i], p.alpha[i], p.A_array[i],
+                                    p.LDA[i], p.B_array[i], p.LDB[i], p.beta[i],
+                                    p.C_array[i], p.LDC[i]);
+
+                }
+        }
+#endif
 };
 
 #endif
