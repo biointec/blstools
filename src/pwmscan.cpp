@@ -33,8 +33,6 @@
 
 #ifdef HAVE_CUDA
         #include <cuda_runtime.h>
-        #include <cublas_v2.h>
-        #include "helper_cuda.h"
 #endif
 
 using namespace std;
@@ -78,7 +76,7 @@ void PWMScan::printUsage() const
 }
 
 void PWMScan::writeOccToDisk(size_t speciesID,
-                             const std::vector<MotifOccurrence>& occurrences)
+                             const std::vector<MotifOccurrence> occurrences)
 {
         // produce a string outside the mutex
         ostringstream oss;
@@ -291,7 +289,6 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
 {
         float *d_P = 0, *d_S = 0, *d_R = 0;
         float *d_threshold = 0, *d_occScore = 0;
-
         int *d_occIdx = 0, *d_nOcc = 0;
 
         size_t overlap = motifContainer.getMaxMotifLen() - 1;
@@ -308,18 +305,18 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
         // pattern matrix
         const Matrix& P = motifContainer.getMatrix();
         if (cudaMalloc((void **)&d_P, P.nRows() * P.nCols() * sizeof(float)) != cudaSuccess)
-                throw runtime_error("Cannot allocate memory on CUDA device\n");
+                throw runtime_error("Cannot allocate memory on CUDA device for P\n");
         cublasSetVector(P.nRows() * P.nCols(), sizeof(float), P.getData(), 1, d_P, 1);
 
         // sequence matrix
         SeqMatrix sm(h, w, overlap);
         if (cudaMalloc((void **)&d_S, 4*(w + overlap) * h * sizeof(float)) != cudaSuccess)
-                throw runtime_error("Cannot allocate memory on CUDA device\n");
+                throw runtime_error("Cannot allocate memory on CUDA device for S\n");
 
         // result matrix
         Matrix R(h, P.nCols());
         if (cudaMalloc((void **)&d_R, R.nRows() * R.nCols() * sizeof(float)) != cudaSuccess)
-                throw runtime_error("Cannot allocate memory on CUDA device\n");
+                throw runtime_error("Cannot allocate memory on CUDA device for R\n");
 
         // set the thresholds
         float *threshold = new float[R.nCols()];
@@ -330,7 +327,7 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
         }
 
         if (cudaMalloc((void **)&d_threshold, R.nCols() * sizeof(float)) != cudaSuccess)
-                throw runtime_error("Cannot allocate memory on CUDA device\n");
+                throw runtime_error("Cannot allocate memory on CUDA device for threshold\n");
         cublasSetVector(R.nCols(), sizeof(float), threshold, 1, d_threshold, 1);
         delete [] threshold;
 
@@ -338,15 +335,15 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
         vector<MotifOccurrence> occurrences;
         float *occScore = new float[2 * R.nRows() * R.nCols()];
         if (cudaMalloc((void **)&d_occScore, 2 * R.nRows() * R.nCols() * sizeof(float)) != cudaSuccess)
-                throw runtime_error("Cannot allocate memory on CUDA device\n");
+                throw runtime_error("Cannot allocate memory on CUDA device for occurrence scores\n");
 
         int *occIdx = new int[2 * R.nRows() * R.nCols()];
         if (cudaMalloc((void **)&d_occIdx, 2 * R.nRows() * R.nCols() * sizeof(int)) != cudaSuccess)
-                throw runtime_error("Cannot allocate memory on CUDA device\n");
+                throw runtime_error("Cannot allocate memory on CUDA device for occurrence indices\n");
 
         int nOcc = 0;
         if (cudaMalloc((void **)&d_nOcc, sizeof(int)) != cudaSuccess)
-                throw runtime_error("Cannot allocate memory on CUDA device\n");
+                throw runtime_error("Cannot allocate memory on CUDA device for number of occurrences\n");
         cublasSetVector(1, sizeof(int), &nOcc, 1, d_nOcc, 1);
 
         // set the BLAS parameters
@@ -378,7 +375,7 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
 
                 for (size_t offset = 0; offset < w; offset++) {
                         for (size_t i = 0; i < matrixTiles.size(); i++)
-                                p.A_array[i] = sm.S.getData() + 4*offset*p.LDA[i];
+                                p.A_array[i] = d_S + 4*offset*p.LDA[i];
 
                         Matrix::sgemm_batch_cuda(handle, p);
                         kernel_wrapper(d_R, R.nRows(), R.nCols(), d_threshold,
@@ -403,7 +400,7 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
                 // write the output to disk
                 if (outputTask[currOutputTask].valid())
                         outputTask[currOutputTask].get();
-                outputTask[currOutputTask] = async(launch::async, &PWMScan::writeOccToDisk, this, speciesID, cref(occurrences));
+                outputTask[currOutputTask] = async(launch::async, &PWMScan::writeOccToDisk, this, speciesID, occurrences);
                 currOutputTask = (currOutputTask + 1) % nOutputTasks;
 
                 occurrences.clear();
@@ -442,7 +439,7 @@ void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContain
         }
 
         // limit the number of devices to the number of threads specified
-        if (numThreads < numDevices)
+        if (numThreads < (size_t)numDevices)
                 numDevices = numThreads;
 
         cout << "Using " << numDevices << " GPU devices" << endl;

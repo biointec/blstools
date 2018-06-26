@@ -90,7 +90,7 @@ private:
          * @param occurrences Occurrences to write
          */
         void writeOccToDisk(size_t speciesID,
-                            const std::vector<MotifOccurrence>& occurrences);
+                            const std::vector<MotifOccurrence> occurrences);
 
         /**
          * Given a result matrix, extract the PWM occurrences
