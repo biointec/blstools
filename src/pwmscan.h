@@ -27,6 +27,7 @@
 #include "matrix.h"
 #include "motif.h"
 #include "sequence.h"
+#include "settings.h"
 
 // ============================================================================
 // CLASS PROTOTYPES
@@ -41,8 +42,10 @@ class SpeciesContainer;
 class PWMScan
 {
 private:
+        Settings settings;
+
         bool simpleMode;
-	bool cudaMode;
+        bool cudaMode;
 
         std::string outputFilename;
 

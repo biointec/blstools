@@ -193,7 +193,9 @@ Histogram::Histogram(int argc, char ** argv) : maxLength(10000000), numBins(250)
                         motif.PFM2PWM(species.getNuclCounts(), pseudocounts);
 
                 // from these PWMs, generate the pattern matrix
-                motifContainer.generateMatrix();
+                motifContainer.generateMatrix(settings.matrix_P_tile_min_size,
+                                              settings.matrix_P_tile_min_area,
+                                              settings.matrix_P_tile_min_zero_frac);
 
                 // now generate score histograms for each motif
                 vector<ScoreHistogram> histContainer;

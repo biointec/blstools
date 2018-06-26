@@ -378,9 +378,13 @@ private:
         /**
          * Keep/reject a split
          * @param tilePair Two input tiles
+         * @param tileMinSize Minimum size for a tile
+         * @param tileMinArea Minimum area for a tile
+         * @param tileMinZeroFrac Minimum zero fraction for a tile
          * @return True or false
          */
-        bool keepSplit(const TilePair& tilePair);
+        bool keepSplit(const TilePair& tilePair, size_t tileMinSize,
+                       size_t tileMinArea, double tileMinZeroFrac);
 
         std::vector<Motif> motifs;              // actual motifs
         Matrix P;                               // pattern matrix
@@ -417,9 +421,14 @@ public:
         void addReverseComplements();
 
         /**
-         * Generate a motif (pattern) matrix P
+         * Generate a motif (pattern) matrix P and create tiles if needed
+         * @param tileMinSize Minimum size for a tile
+         * @param tileMinArea Minimum area for a tile
+         * @param tileMinZeroFrac Minimum zero fraction for a tile
          */
-        void generateMatrix();
+        void generateMatrix(size_t tileMinSize,
+                            size_t tileMinArea,
+                            double tileMinZeroFrac);
 
         /**
          * Get a const-reference to matrix P

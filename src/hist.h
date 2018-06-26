@@ -22,6 +22,7 @@
 #define PWM_H
 
 #include <vector>
+#include "settings.h"
 
 // ============================================================================
 // CLASS PROTOTYPES
@@ -58,6 +59,7 @@ private:
                                const MotifContainer& MotifContainer,
                                std::vector<ScoreHistogram>& histContainer);
 
+        Settings settings;      // settings object
         size_t maxLength;       // maximum length of sequence data to analyze
         size_t numBins;         // number of bins per histogram
         std::string histdir;    // histogram directory

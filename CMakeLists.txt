@@ -8,6 +8,7 @@ set(${PROJECT_NAME}_PATCH_LEVEL 0)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
+# set the default build type to release
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
@@ -26,11 +27,11 @@ add_definitions("-DBLSTOOLS_PATCH_LEVEL=${${PROJECT_NAME}_PATCH_LEVEL}")
 
 # set the MKL definition
 if (HAVE_MKL)
-	add_definitions("-DHAVE_MKL")
+        add_definitions("-DHAVE_MKL")
 endif (HAVE_MKL)
 
-# uncomment the portion below to disable assertions                                                                                                                                                               
-if (CMAKE_BUILD_TYPE STREQUAL Release)                                                                                                                                                                            
+# uncomment the portion below to disable assertions
+if (CMAKE_BUILD_TYPE STREQUAL Release)
         add_definitions(-DNDEBUG)
 else (CMAKE_BUILD_TYPE STREQUAL Release)
         add_definitions(-DDEBUG)
@@ -39,7 +40,7 @@ endif (CMAKE_BUILD_TYPE STREQUAL Release)
 include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
 if(COMPILER_SUPPORTS_CXX11)
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 else()
         message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a more recent C++ compiler.")
 endif()
@@ -65,14 +66,14 @@ if (CUDA_FOUND)
         cuda_add_executable(blstools src/dict.cpp src/hist.cpp src/blstools.cpp
                 src/bls.cpp src/phylotree.cpp src/matrix.cpp src/pwmscan.cpp
                 src/motif.cpp src/sequence.cpp  src/ortho.cpp src/species.cpp
-                src/kernel.cu)
+                src/kernel.cu src/settings.cpp)
         target_link_libraries(blstools ${BLAS_LIBRARIES} ${CUDA_LIBRARIES}
-		${CUDA_CUBLAS_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+                ${CUDA_CUBLAS_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
         install(TARGETS blstools RUNTIME DESTINATION bin)
 else()  # No CUDA support
-	add_executable(blstools src/dict.cpp src/hist.cpp src/blstools.cpp src/bls.cpp
-        	src/phylotree.cpp src/matrix.cpp src/pwmscan.cpp src/motif.cpp
-	        src/sequence.cpp  src/ortho.cpp src/species.cpp)
-	target_link_libraries(blstools ${BLAS_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
-	install(TARGETS blstools RUNTIME DESTINATION bin)
+        add_executable(blstools src/dict.cpp src/hist.cpp src/blstools.cpp src/bls.cpp
+                src/phylotree.cpp src/matrix.cpp src/pwmscan.cpp src/motif.cpp
+                src/sequence.cpp  src/ortho.cpp src/species.cpp src/settings.cpp)
+        target_link_libraries(blstools ${BLAS_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+        install(TARGETS blstools RUNTIME DESTINATION bin)
 endif()

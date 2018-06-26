@@ -385,12 +385,9 @@ TilePair MotifContainer::findBestSplit(const MatrixTile& input)
         return make_pair(left, right);
 }
 
-bool MotifContainer::keepSplit(const TilePair& tilePair)
+bool MotifContainer::keepSplit(const TilePair& tilePair, size_t tileMinSize,
+                               size_t tileMinArea, double tileMinZeroFrac)
 {
-        const size_t minSize = 32;
-        const size_t minArea = 128*128;
-        const double minZeroFrac = 0.10;
-
         const MatrixTile& f = tilePair.first;
         const MatrixTile& s = tilePair.second;
 
@@ -399,29 +396,30 @@ bool MotifContainer::keepSplit(const TilePair& tilePair)
         size_t area2 = (s.rowEnd-s.rowStart) * (s.colEnd-s.colStart);
 
         // check the minimum matrix dimensions
-        if (f.colEnd - f.colStart < minSize)
+        if (f.colEnd - f.colStart < tileMinSize)
                 return false;
-        if (f.rowEnd - f.rowStart < minSize)
+        if (f.rowEnd - f.rowStart < tileMinSize)
                 return false;
-        if (s.colEnd - s.colStart < minSize)
+        if (s.colEnd - s.colStart < tileMinSize)
                 return false;
-        if (s.rowEnd - s.rowStart < minSize)
+        if (s.rowEnd - s.rowStart < tileMinSize)
                 return false;
 
         // check the minimum area
-        if (area1 < minArea)
+        if (area1 < tileMinArea)
                 return false;
-        if (area2 < minArea)
+        if (area2 < tileMinArea)
                 return false;
 
         // check the relative area gain
-        if (double(area1 + area2)/double(origArea) > (1.0-minZeroFrac))
+        if (double(area1 + area2)/double(origArea) > (1.0-tileMinZeroFrac))
                 return false;
 
         return true;
 }
 
-void MotifContainer::generateMatrix()
+void MotifContainer::generateMatrix(size_t tileMinSize, size_t tileMinArea,
+                                    double tileMinZeroFrac)
 {
         // allocate memory for matrix P
         size_t m = motifs.size();
@@ -449,7 +447,7 @@ void MotifContainer::generateMatrix()
                 for (const auto& it : matrixTiles) {
                         auto res = findBestSplit(it);
 
-                        if (keepSplit(res)) {
+                        if (keepSplit(res, tileMinSize, tileMinArea, tileMinZeroFrac)) {
                                 // keep the split
                                 didSomething = true;
                                 newTiles.push_back(res.first);

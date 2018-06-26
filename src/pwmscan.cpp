@@ -213,33 +213,34 @@ void PWMScan::scanPWMNaive(size_t speciesID, const MotifContainer& motifContaine
         cout << endl;
 }
 
-void PWMScan::scanThreadBLAS(size_t speciesID, const MotifContainer& motifContainer,
-                         FastaBatch& seqBatch)
+void PWMScan::scanThreadBLAS(size_t speciesID,
+                             const MotifContainer& motifContainer,
+                             FastaBatch& seqBatch)
 {
         size_t overlap = motifContainer.getMaxMotifLen() - 1;
-        size_t K = 250;                 // choose freely
-        size_t W = 4*K;                 // choose freely
+        size_t w = settings.matrix_S_w;
+        size_t h = settings.matrix_S_h;
 
         // pattern matrix
         const Matrix &P = motifContainer.getMatrix();
 
         // sequence matrix
-        SeqMatrix sm(W, K, overlap);
+        SeqMatrix sm(h, w, overlap);
 
         // result matrix
-        Matrix R(W, P.nCols());
+        Matrix R(h, P.nCols());
 
         // sgemm batch parameters
         const auto matrixTiles = motifContainer.getMatrixTiles();
         SgemmBatchParams p(matrixTiles.size());
 
         for (size_t i = 0; i < matrixTiles.size(); i++) {
-                p.m[i] = W;
+                p.m[i] = h;
                 p.k[i] = matrixTiles[i].rowEnd;
                 p.n[i] = matrixTiles[i].colEnd-matrixTiles[i].colStart;
-                p.LDA[i] = W;
+                p.LDA[i] = h;
                 p.LDB[i] = P.nRows();
-                p.LDC[i] = W;
+                p.LDC[i] = h;
                 p.alpha[i] = 1.0f;
                 p.beta[i] = 0.0f;
                 p.B_array[i] = P.getData() + matrixTiles[i].colStart*p.LDB[i];
@@ -248,7 +249,7 @@ void PWMScan::scanThreadBLAS(size_t speciesID, const MotifContainer& motifContai
 
         vector<MotifOccurrence> occurrences;
         while (sm.getNextSeqMatrix(seqBatch)) {
-                for (size_t offset = 0; offset < K; offset++) {
+                for (size_t offset = 0; offset < w; offset++) {
                         for (size_t i = 0; i < matrixTiles.size(); i++)
                                 p.A_array[i] = sm.getData() + 4*offset*p.LDA[i];
 
@@ -591,7 +592,9 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
                 }
 
                 // from these PWMs, generate the pattern matrix
-                motifContainer.generateMatrix();
+                motifContainer.generateMatrix(settings.matrix_P_tile_min_size,
+                                              settings.matrix_P_tile_min_area,
+                                              settings.matrix_P_tile_min_zero_frac);
 
                 vector<string> filenames = species.getSequenceFilenames();
                 FastaBatch seqBatch(filenames);
