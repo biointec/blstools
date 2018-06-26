@@ -614,7 +614,7 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
 #ifdef HAVE_CUDA
                         scanPWMCUBLAS(speciesID++, motifContainer, seqBatch);
 #else
-                        cerr << "ERROR: CUDA support not enabled in blstools\n";
+                        cerr << "ERROR: CUDA support not enabled\n";
                         cerr << "Please recompile with CUDA support enabled" << endl;
 #endif
                 } else {
