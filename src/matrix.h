@@ -310,11 +310,10 @@ public:
         {
                 for (int i = 0; i < p.groupCount; i++)
                         cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, p.m[i],
-                                    p.n[i], p.k[i], p.alpha[i], p.A_array[i],
-                                    p.LDA[i], p.B_array[i], p.LDB[i], p.beta[i],
+                                    p.n[i], p.k[i], &p.alpha[i], p.A_array[i],
+                                    p.LDA[i], p.B_array[i], p.LDB[i], &p.beta[i],
                                     p.C_array[i], p.LDC[i]);
 
-                }
         }
 #endif
 };
