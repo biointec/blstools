@@ -25,6 +25,7 @@
 #include <array>
 #include <atomic>
 #include <cassert>
+#include <map>
 
 #include "matrix.h"
 
@@ -101,6 +102,19 @@ public:
         }
 
         /**
+         * Set the number of observations in the histogram
+         * @param score Score of the observation
+         * @param count Number of observations
+         */
+        void setNumObservations(float score, size_t count) {
+                int binIdx = int((score - minScore) / width);
+                binIdx = std::max<int>(0, binIdx);
+                binIdx = std::min<int>(numBins-1, binIdx);
+
+                counts[binIdx].store(count);
+        }
+
+        /**
          * Compute the weighted average of the observations
          */
         float getAverage() const;
@@ -145,6 +159,10 @@ private:
         bool revComp;                                   // is this a rev-compl motif
 
 public:
+        void computeTheoreticalSpectrum(size_t numBins,
+                                        const std::array<float, 4>& background,
+                                        std::map<float, float>& spectrum) const;
+
         /**
          * Default constructor
          */
@@ -220,6 +238,14 @@ public:
          */
         const std::array<float,4>& operator[](size_t i) const {
                 return PWM[i];
+        }
+
+        /**
+         * Get the position frequency matrix
+         * @return the position frequency matrix
+         */
+        std::vector<std::array<size_t, 4> > getPFM() const {
+                return PFM;
         }
 
         /**

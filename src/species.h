@@ -94,6 +94,18 @@ public:
         }
 
         /**
+         * Get the nucleotide probabilities
+         * @return the nucleotide probabilities
+         */
+        std::array<float, 4> getNuclProbabilities() const {
+                std::array<float, 4> probabilities;
+                for (size_t i = 0; i < 4; i++)
+                        probabilities[i] = (float)nuclCounts[i] / (float)totSeqLen;
+
+                return probabilities;
+        }
+
+        /**
          * Get the total sequence length
          * @return The total sequence length
          */

@@ -21,7 +21,6 @@
 #include <fstream>
 #include <sstream>
 #include <cmath>
-
 #include <iostream>
 #include <algorithm>
 #include <numeric>
@@ -147,6 +146,49 @@ size_t char2idx(char c)
         if (c == 'T' || c == 't')
                 return 3;
         return 4;
+}
+
+void Motif::computeTheoreticalSpectrum(size_t numBins, const array<float, 4>& background,
+                                       map<float, float>& spectrum) const
+{
+        // compute linear transformation of PWM scores and round to nearest int
+        float minS = getMinScore();
+        float maxS = getMaxScore();
+        float range = maxS - minS;
+
+        float a = (float)numBins / range;
+        float b = -a*minS / (float)size();
+
+        std::vector<std::array<int, 4> > PWMInt(size());
+        for (size_t p = 0; p < size(); p++)
+                for (size_t k = 0; k < 4; k++)
+                        PWMInt[p][k] = (int)round(a*PWM[p][k]+b);
+
+        // compute the p-value spectrum
+        vector<map<int, float> > nbocc(size());
+
+        // initializes the map at position 0
+        for (size_t k = 0; k < 4; k++)
+                nbocc[0][PWMInt[0][k]] += background[k];
+
+        // computes PDF values
+        for (size_t pos = 1; pos < size(); pos++) {
+                for (const auto& it : nbocc[pos-1]) {
+                        for (size_t k = 0; k < 4; k++) {
+                                int score = it.first + PWMInt[pos][k];
+                                nbocc[pos][score] += nbocc[pos-1][it.first] * background[k];
+                        }
+                }
+        }
+
+        // generate the actual spectrum in the original score range
+        spectrum.clear();
+        for (const auto& it : nbocc[size()-1]) {
+                cout << it.first << "\t";
+                float score = ((float)it.first - size()*b)/a;
+                cout << score << endl;
+                spectrum.insert(make_pair(score, it.second));
+        }
 }
 
 void Motif::PFM2PWM(const std::array<size_t, 4>& bgCounts, size_t pseudoCounts)
@@ -298,6 +340,10 @@ void MotifContainer::loadCBMotifs(const std::string& filename,
                         motifs.push_back(Motif(temp.substr(1), motifID++));
                         continue;
                 }
+
+                if (motifs.empty())
+                        throw runtime_error("Incorrect motif file format: " + filename);
+
                 istringstream iss(temp);
                 size_t A, C, G, T;
                 iss >> A >> C >> G >> T;
@@ -439,6 +485,7 @@ void MotifContainer::generateMatrix(size_t tileMinSize, size_t tileMinArea,
                 col2MotifID.push_back(i);
         }
 
+        matrixTiles.clear();
         matrixTiles.push_back(MatrixTile(0, 0, P.nRows(), P.nCols()));
         while (true) {
                 vector<MatrixTile> newTiles;

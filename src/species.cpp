@@ -101,9 +101,10 @@ void Species::load(std::ifstream& ifs)
         }
 
         // total sequence length
-        size_t totSeqLen;
         ifs >> temp >> totSeqLen;
         assert(temp == "TOT_SEQ_LENGTH");
+
+        cout << " LOADED " << totSeqLen << endl;
 
         // nucleotide composition
         ifs >> temp >> nuclCounts[0] >> nuclCounts[1] >> nuclCounts[2]

@@ -29,6 +29,8 @@
 #include "matrix.h"
 #include "species.h"
 
+#include "Matrix.h"
+
 using namespace std;
 
 void Histogram::printUsage() const
@@ -65,17 +67,22 @@ void Histogram::extractObsScore(const Matrix& R, size_t offset,
                           const MotifContainer& motifContainer,
                           vector<ScoreHistogram>& histContainer)
 {
-        for (size_t j = 0; j < sm.getNumOccRow(); j++) {
-                for (size_t i = 0; i < (size_t)R.nRows(); i++) {
-                        float thisScore = R(i,j);
-                        size_t motifID = motifContainer.getMotifIDAtCol(i);
+        for (size_t j = 0; j < R.nCols(); j++) {
 
-                        // check of the occurrence is valid
-                        size_t remSeqLen = sm.getRemainingSeqLen(offset, j);
-                        if (motifContainer[motifID].size() > remSeqLen)
+                // get the motif information
+                size_t motifIdx = motifContainer.getMotifIDAtCol(j);
+                const Motif& m = motifContainer[motifIdx];
+
+                for (size_t i = 0; i < sm.getNumOccRow(); i++) {
+                        float thisScore = R(i,j);
+
+                        // at this point an occurrence is found
+                        size_t remSeqLen = sm.getRemainingSeqLen(i, offset);
+
+                        if (m.size() > remSeqLen)
                                 continue;
 
-                        histContainer[motifID].addObservation(thisScore);
+                        histContainer[motifIdx].addObservation(thisScore);
                 }
         }
 }
@@ -85,24 +92,41 @@ void Histogram::histThread(const MotifContainer& motifContainer,
                            vector<ScoreHistogram>& histContainer)
 {
         size_t overlap = motifContainer.getMaxMotifLen() - 1;
-        size_t K = 250;                 // choose freely
-        size_t W = 4*K;                 // choose freely
+        size_t w = settings.matrix_S_w;
+        size_t h = settings.matrix_S_h;
 
         // pattern matrix
         const Matrix& P = motifContainer.getMatrix();
-        const auto matBlock = motifContainer.getMatrixTiles();
 
         // sequence matrix
-        SeqMatrix sm(K, overlap, W);
+        SeqMatrix sm(h, w, overlap);
 
         // result matrix
-        Matrix R(P.nRows(), W);
+        Matrix R(h, P.nCols());
+
+        // sgemm batch parameters
+        const auto matrixTiles = motifContainer.getMatrixTiles();
+        SgemmBatchParams p(matrixTiles.size());
+
+        for (size_t i = 0; i < matrixTiles.size(); i++) {
+                p.m[i] = h;
+                p.k[i] = matrixTiles[i].rowEnd;
+                p.n[i] = matrixTiles[i].colEnd-matrixTiles[i].colStart;
+                p.LDA[i] = h;
+                p.LDB[i] = P.nRows();
+                p.LDC[i] = h;
+                p.alpha[i] = 1.0f;
+                p.beta[i] = 0.0f;
+                p.B_array[i] = P.getData() + matrixTiles[i].colStart*p.LDB[i];
+                p.C_array[i] = R.getData() + matrixTiles[i].colStart*p.LDC[i];
+        }
 
         while (sm.getNextSeqMatrix(seqBatch)) {
-                for (size_t offset = 0; offset < K; offset++) {
-                        //SubMatrix<float> subS = sm.getSubMatrix(offset);
-                        //R.gemm(P, subS);
-                        //R.gemm(subS, P, matBlock);
+                for (size_t offset = 0; offset < w; offset++) {
+                        for (size_t i = 0; i < matrixTiles.size(); i++)
+                                p.A_array[i] = sm.getData() + 4*offset*p.LDA[i];
+
+                        Matrix::sgemm_batch(p);
                         extractObsScore(R, offset, sm, motifContainer, histContainer);
                 }
 
@@ -110,14 +134,14 @@ void Histogram::histThread(const MotifContainer& motifContainer,
         }
 }
 
-void Histogram::generateHistogram(const Species& species,
-                                  const MotifContainer& motifContainer,
-                                  vector<ScoreHistogram>& histContainer)
+void Histogram::generateEmpiricalHist(const Species& species,
+                                      const MotifContainer& motifContainer,
+                                      vector<ScoreHistogram>& histContainer)
 {
         vector<string> filenames = species.getSequenceFilenames();
         FastaBatch seqBatch(filenames, maxLength);
 
-        cout << "Using " << numThreads << " threads" << endl;
+        cout << "Using " << numThreads << " thread(s)" << endl;
 
         // start histogram threads
         vector<thread> workerThreads(numThreads);
@@ -130,6 +154,20 @@ void Histogram::generateHistogram(const Species& species,
         for_each(workerThreads.begin(), workerThreads.end(), mem_fn(&thread::join));
 
         cout << endl;
+}
+
+void Histogram::generateTheoreticalHist(const Species& species,
+                                        const MotifContainer& motifContainer,
+                                        vector<ScoreHistogram>& histContainer)
+{
+        for (const Motif& m : motifContainer) {
+                map<float, float> spectrum;     // < score, PDF >
+                array<float, 4> background = species.getNuclProbabilities();
+                m.computeTheoreticalSpectrum(numBins, background, spectrum);
+
+                for (const auto& it : spectrum)
+                        histContainer[m.getID()].setNumObservations(it.first, maxLength * it.second);
+        }
 }
 
 Histogram::Histogram(int argc, char ** argv) : maxLength(10000000), numBins(250),
@@ -187,6 +225,7 @@ Histogram::Histogram(int argc, char ** argv) : maxLength(10000000), numBins(250)
 
         for (auto species : speciesContainer) {
                 cout << "Scanning species: " << species.getName() << endl;
+                cout << species.getTotalSeqLength() << endl;
 
                 // generate the PWM using the background counts for those species
                 for (auto& motif : motifContainer)
@@ -204,7 +243,8 @@ Histogram::Histogram(int argc, char ** argv) : maxLength(10000000), numBins(250)
                         histContainer.push_back(ScoreHistogram(m.getMinScore(), m.getMaxScore(), numBins));
                 }
 
-                generateHistogram(species, motifContainer, histContainer);
+                //generateEmpiricalHist(species, motifContainer, histContainer);
+                generateTheoreticalHist(species, motifContainer, histContainer);
 
                 // write all histograms to file
                 for (size_t i = 0; i < histContainer.size(); i++)

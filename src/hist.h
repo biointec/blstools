@@ -55,9 +55,13 @@ private:
         void histThread(const MotifContainer& motifs,
                         FastaBatch& fb, std::vector<ScoreHistogram>& histContainer);
 
-        void generateHistogram(const Species& species,
-                               const MotifContainer& MotifContainer,
-                               std::vector<ScoreHistogram>& histContainer);
+        void generateEmpiricalHist(const Species& species,
+                                   const MotifContainer& MotifContainer,
+                                   std::vector<ScoreHistogram>& histContainer);
+
+        void generateTheoreticalHist(const Species& species,
+                                     const MotifContainer& MotifContainer,
+                                     std::vector<ScoreHistogram>& histContainer);
 
         Settings settings;      // settings object
         size_t maxLength;       // maximum length of sequence data to analyze
