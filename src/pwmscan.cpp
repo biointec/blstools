@@ -193,6 +193,8 @@ void PWMScan::scanThreadNaive(size_t speciesID, const MotifContainer& motifConta
 
                 writeOccToDisk(speciesID, occurrences);
                 occurrences.clear();
+
+                cout << "."; cout.flush();
         }
 }
 
@@ -567,7 +569,6 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
 
         cout << "Using " << numThreads << " thread(s)" << endl;
 
-       // motifContainer.writePossumFile("motifs.possum");
        // motifContainer.writeMOODSFiles();
 
         // C) scan the sequences
@@ -583,6 +584,8 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
 
                 // compute PWMs and generate the pattern matrix
                 motifContainer.generateMatrix(species.getNuclCounts(), settings.pseudocount);
+
+                //motifContainer.writePossumFile("jaspar.possum");
 
                 // set or compute the thresholds
                 if (absThSpecified) {
