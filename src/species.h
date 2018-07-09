@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2017 Jan Fostier (jan.fostier@ugent.be)                 *
- *   This file is part of BLStools                                         *
+ *   Copyright (C) 2017-2018 Jan Fostier (jan.fostier@ugent.be)            *
+ *   This file is part of Blamm                                            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -95,15 +95,16 @@ public:
 
         /**
          * Get the nucleotide probabilities
+         * @param pseudoCount pseudo count to include when computing probabilities
          * @return the nucleotide probabilities
          */
-        std::array<float, 4> getNuclProbabilities() const {
-                std::array<float, 4> probabilities;
-                for (size_t i = 0; i < 4; i++)
-                        probabilities[i] = (float)nuclCounts[i] / (float)totSeqLen;
+        std::array<float, 4> getNuclProbabilities(float pseudoCount) const;
 
-                return probabilities;
-        }
+        /**
+         * Write the nucleotide probabilities to stdout
+         * @param pseudoCount pseudo count to include when computing probabilities
+         */
+        void writeNuclProbabilities(float pseudoCount) const;
 
         /**
          * Get the total sequence length

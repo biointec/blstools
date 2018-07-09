@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2017 Jan Fostier (jan.fostier@ugent.be)                 *
- *   This file is part of BLStools                                         *
+ *   Copyright (C) 2017-2018 Jan Fostier (jan.fostier@ugent.be)            *
+ *   This file is part of Blamm                                            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -32,10 +32,11 @@ using namespace std;
 
 void printProgramVersion()
 {
-        cout << "BLStools version " << BLSTOOLS_MAJOR_VERSION << "."
-             << BLSTOOLS_MINOR_VERSION << "." << BLSTOOLS_PATCH_LEVEL << "\n";
+        cout << "BLAS Accelerated Motif Matching (blamm) -- version "
+             << BLAMM_MAJOR_VERSION << "." << BLAMM_MINOR_VERSION
+             << "." << BLAMM_PATCH_LEVEL << "\n";
 
-        cout << "Copyright (C) 2017 Jan Fostier (jan.fostier@ugent.be)\n";
+        cout << "Copyright (C) 2017-2018 Jan Fostier (jan.fostier@ugent.be)\n";
         cout << "This is free software; see the source for copying conditions. "
                 "There is NO\nwarranty; not even for MERCHANTABILITY or "
                 "FITNESS FOR A PARTICULAR PURPOSE.\n" << endl;
@@ -43,14 +44,14 @@ void printProgramVersion()
 
 void printUsage()
 {
-        cout << "Usage: blstools command [options]\n\n";
+        cout << "Usage: blamm command [options]\n\n";
 
         cout << " command\n";
         cout << "  dict\t\t\tmake a dictionary for the input sequences\n";
         cout << "  hist\t\t\tgenerate PWM score histograms\n";
-        cout << "  scan\t\t\tscan for pwm occurrences\n";
-        cout << "  bls\t\t\tcompute the branch length score\n";
-        cout << "  ortho\t\t\tconvert ortho groups\n\n";
+        cout << "  scan\t\t\tscan for pwm occurrences\n\n";
+        //cout << "  bls\t\t\tcompute the branch length score\n";
+        //cout << "  ortho\t\t\tconvert ortho groups\n\n";
 
         cout << " [options]\n";
         cout << "  -h\t--help\t\tdisplay help page\n";
@@ -127,13 +128,13 @@ int main(int argc, char **argv)
                         command = Command::dict;
                 } else if (arg == "hist") {
                         command = Command::hist;
-                } else if (arg == "bls") {
-                        command = Command::bls;
                 } else if (arg == "scan") {
                         command = Command::scan;
+                } /*else if (arg == "bls") {
+                        command = Command::bls;
                 } else if (arg == "ortho") {
                         command = Command::ortho;
-                }
+                }*/
         }
 
         switch (command)

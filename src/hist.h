@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2017 Jan Fostier (jan.fostier@ugent.be)                 *
- *   This file is part of BLStools                                         *
+ *   Copyright (C) 2017-2018 Jan Fostier (jan.fostier@ugent.be)            *
+ *   This file is part of Blamm                                            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -68,7 +68,7 @@ private:
         size_t numBins;         // number of bins per histogram
         std::string histdir;    // histogram directory
         size_t numThreads;      // number of threads
-        size_t pseudocounts;    // pseudocounts of PWM computation
+        bool empirical;         // compute empirical spectra
 
 public:
         /**

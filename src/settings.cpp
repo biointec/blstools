@@ -33,21 +33,20 @@ using namespace std;
 
 Settings::Settings() : matrix_S_w(250), matrix_S_h(1000),
         matrix_P_tile_min_size(32), matrix_P_tile_min_area(128*128),
-        matrix_P_tile_min_zero_frac(0.1)
+        matrix_P_tile_min_zero_frac(0.1), pseudocount(0.25f), defaultVal(true)
 {
         ifstream ifs("settings.cnf");
-        if (!ifs) {
-                cout << "File settings.cnf not found, using default values" << endl;
+        if (!ifs)
                 return;
-        }
 
-        cout << "Loading configuration from file settings.cnf" << endl;
+        defaultVal = false;
+
         while (ifs) {
                 string line;
                 getline(ifs, line);
 
                 // remove leading spaces
-//                line = regex_replace(line, regex("^ +"), string(""));
+                line = regex_replace(line, regex("^ +"), string(""));
 
                 // skip empty lines
                 if (line.empty())
@@ -61,8 +60,6 @@ Settings::Settings() : matrix_S_w(250), matrix_S_h(1000),
                 string key;
                 iss >> key;
 
-		cout << key << endl;
-
                 if (key == "MATRIX_S_W") {
                         iss >> matrix_S_w;
                 } else if (key == "MATRIX_S_H") {
@@ -73,8 +70,25 @@ Settings::Settings() : matrix_S_w(250), matrix_S_h(1000),
                         iss >> matrix_P_tile_min_area;
                 } else if (key == "MATRIX_P_TILE_MIN_ZERO_FRAC") {
                         iss >> matrix_P_tile_min_zero_frac;
+                } else if (key == "PSEUDOCOUNT") {
+                        iss >> pseudocount;
                 } else {
                         cerr << "WARNING: settings.cnf contains unknown key: " << key << endl;
                 }
         }
+}
+
+void Settings::printSettings()
+{
+        if (defaultVal)
+                cout << "File settings.cnf not found, using default values" << endl;
+        else
+                cout << "Loaded configuration from file settings.cnf" << endl;
+
+        cout << "\tMATRIX_S_W\t" << matrix_S_w << "\n";
+        cout << "\tMATRIX_S_H\t" << matrix_S_h << "\n";
+        cout << "\tMATRIX_P_TILE_MIN_SIZE\t" << matrix_P_tile_min_size << "\n";
+        cout << "\tMATRIX_P_TILE_MIN_AREA\t" << matrix_P_tile_min_area << "\n";
+        cout << "\tMATRIX_P_TILE_MIN_ZERO_FRAC\t" << matrix_P_tile_min_zero_frac << "\n";
+        cout << "\tPSEUDOCOUNT\t" << pseudocount << endl;
 }

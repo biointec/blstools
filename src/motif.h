@@ -154,6 +154,7 @@ private:
         std::string name;                               // name of the motif
         size_t motifID;                                 // motif identifier
         std::vector<std::array<size_t, 4> > PFM;        // position frequency matrix
+        std::vector<std::array<float, 4> > PPM;         // position probability matrix
         std::vector<std::array<float, 4> > PWM;         // position weight matrix
         float threshold;                                // occurrence threshold cutoff
         bool revComp;                                   // is this a rev-compl motif
@@ -193,6 +194,14 @@ public:
         }
 
         /**
+         * Set the motif identifier
+         * @param target Target motif identifier
+         */
+        void setID(size_t target) {
+                motifID = target;
+        }
+
+        /**
          * Is the motif a reverse complement?
          * @return True or false
          */
@@ -222,7 +231,7 @@ public:
          * @param pseudoCounts Pseudo counts for both the motif PFM and bgCounts
          */
         void PFM2PWM(const std::array<size_t, 4>& bgCounts,
-                     size_t pseudoCounts = 0);
+                     float pseudoCounts);
 
         /**
          * Get the size (= length) of a motif
@@ -230,6 +239,16 @@ public:
          */
         size_t size() const {
                 return PFM.size();
+        }
+
+        /**
+         * Get the observation count in the PFM
+         * @return The observation count
+         */
+        size_t getCount() const {
+                if (PFM.empty())
+                        return 0;
+                return PFM[0][0] + PFM[0][1] + PFM[0][2] + PFM[0][3];
         }
 
         /**
@@ -447,14 +466,22 @@ public:
         void addReverseComplements();
 
         /**
-         * Generate a motif (pattern) matrix P and create tiles if needed
+         * Fill in the elements of matrix P
+         * @param bgCounts Background nucleotide counts (ACTG)
+         * @param pseudoCount Pseudo counts for both the motif PFM and bgCounts
+         */
+        void generateMatrix(const std::array<size_t, 4>& bgCounts,
+                            float pseudoCount);
+
+        /**
+         * Partition matrix P into tiles if needed
          * @param tileMinSize Minimum size for a tile
          * @param tileMinArea Minimum area for a tile
          * @param tileMinZeroFrac Minimum zero fraction for a tile
          */
-        void generateMatrix(size_t tileMinSize,
-                            size_t tileMinArea,
-                            double tileMinZeroFrac);
+        void generateMatrixTiles(size_t tileMinSize,
+                                 size_t tileMinArea,
+                                 double tileMinZeroFrac);
 
         /**
          * Get a const-reference to matrix P

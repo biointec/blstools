@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2017 Jan Fostier (jan.fostier@ugent.be)                 *
- *   This file is part of BLStools                                         *
+ *   Copyright (C) 2017-2018 Jan Fostier (jan.fostier@ugent.be)            *
+ *   This file is part of Blamm                                            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -63,9 +63,6 @@ private:
         size_t numThreads;
 
         bool revCompl;
-
-        size_t pseudocounts;
-
 
         size_t m;               // number of motifs
         size_t n;               // choose freely

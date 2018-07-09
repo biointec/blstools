@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2017 Jan Fostier (jan.fostier@ugent.be)                 *
- *   This file is part of BLStools                                         *
+ *   Copyright (C) 2017-2018 Jan Fostier (jan.fostier@ugent.be)            *
+ *   This file is part of Blamm                                            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -29,35 +29,39 @@
 #include "matrix.h"
 #include "species.h"
 
-#include "Matrix.h"
-
 using namespace std;
 
 void Histogram::printUsage() const
 {
-        cout << "Usage: blstools hist [options] motifs.input sequences.input\n\n";
+        cout << "Usage: blamm hist [options] motifs.input sequences.input\n";
+        cout << "Goal: compute PWM score histograms\n\n";
 
         cout << " [options]\n";
-        cout << "  -h\t--help\t\tdisplay help message\n";
-        cout << "  -l\t--length\tlength of sequence data to analyze [default = 10000000]\n";
+        cout << "  -e\t--empirical\tcompute empirical histograms\n";
+        cout << "  -h\t--help\t\tdisplay help message\n\n";
+
+        cout << " [options arg]\n";
         cout << "  -b\t--numbins\tnumber of bins per histogram [default = 250]\n";
-        cout << "  -t\t--numthreads\tset the number of parallel threads [default = #cores]\n\n";
+        cout << "  -t\t--numthreads\tset the number of parallel threads [default = #cores]\n";
+        cout << "  -l\t--length\tlength of sequence data to analyze [default = 10000000]\n\n";
 
         cout << " [file_options]\n";
         cout << "  -H\t--histdir\toutput directory for the histogram file(s) [default = .]\n\n";
 
-        cout << " File \"motifs.input\" should contain the motifs in Jaspar format\n";
+        cout << " File \"motifs.input\" should contain all motifs\n";
         cout << "  (see documentation for specification)\n\n";
 
-        cout << " File \"sequences.input\" should contain a list of input fasta files in the following format:\n";
+        cout << " File \"sequences.input\" should contain a list of input"
+             << " fasta files in the following format:\n";
         cout << "   speciesID_1\tspecies1_sequences.fasta\n";
         cout << "   speciesID_2\tspecies2_sequences.fasta\n";
         cout << "   speciesID_3\tspecies2_sequences.fasta\n";
         cout << "   ...\n";
-        cout << "  (refer to the documentation for more info)\n\n";
+        cout << " where speciesID_x is a user-defined identifier per species\n";
+        cout << " Refer to the documentation for more information\n\n";
 
         cout << " Example:\n";
-        cout << "  blstools hist motifs.input sequences.input\n\n";
+        cout << "  blamm hist motifs.input sequences.input\n\n";
 
         cout << "Report bugs to Jan Fostier <jan.fostier@ugent.be>\n";
 }
@@ -141,8 +145,6 @@ void Histogram::generateEmpiricalHist(const Species& species,
         vector<string> filenames = species.getSequenceFilenames();
         FastaBatch seqBatch(filenames, maxLength);
 
-        cout << "Using " << numThreads << " thread(s)" << endl;
-
         // start histogram threads
         vector<thread> workerThreads(numThreads);
         for (size_t i = 0; i < workerThreads.size(); i++)
@@ -162,7 +164,7 @@ void Histogram::generateTheoreticalHist(const Species& species,
 {
         for (const Motif& m : motifContainer) {
                 map<float, float> spectrum;     // < score, PDF >
-                array<float, 4> background = species.getNuclProbabilities();
+                array<float, 4> background = species.getNuclProbabilities(settings.pseudocount);
                 m.computeTheoreticalSpectrum(numBins, background, spectrum);
 
                 for (const auto& it : spectrum)
@@ -171,7 +173,7 @@ void Histogram::generateTheoreticalHist(const Species& species,
 }
 
 Histogram::Histogram(int argc, char ** argv) : maxLength(10000000), numBins(250),
-        numThreads(thread::hardware_concurrency()), pseudocounts(1)
+        numThreads(thread::hardware_concurrency()), empirical(false)
 {
         // check for sufficient arguments
         if (argc < 4) {
@@ -194,6 +196,8 @@ Histogram::Histogram(int argc, char ** argv) : maxLength(10000000), numBins(250)
                         if (numBins < 2)
                                 numBins = 2;
                         i++;
+                } else if ((arg == "-e") || (arg == "--empirical")) {
+                        empirical = true;
                 } else if (((arg == "-t") || (arg == "--numthreads")) && (i+1 < argc-2)) {
                         numThreads = atoi(argv[i+1]);
                         i++;
@@ -208,33 +212,37 @@ Histogram::Histogram(int argc, char ** argv) : maxLength(10000000), numBins(250)
                 }
         }
 
-        cout << "Welcome to blstools" << endl;
+        cout << "Welcome to blamm -- histogram module" << endl;
 
-        // GENERATE THE HISTOGRAMS
-        string motifFilename = string(argv[argc-2]);
-
-        MotifContainer motifContainer(motifFilename, false);
-        cout << "Loaded " << motifContainer.size() << " motifs from disk";
-        cout << "\nMaximum motif size: " << motifContainer.getMaxMotifLen() << endl;
-
+        // A) load the manifest file
         string manifestFilename(argv[argc-1]);
         string dictFilename = manifestFilename + ".dict";
 
         SpeciesContainer speciesContainer;
         speciesContainer.load(dictFilename);
 
+        // B) Load the motifs
+        string motifFilename = string(argv[argc-2]);
+
+        MotifContainer motifContainer(motifFilename, false);    // no permutations!
+        cout << "Loaded " << motifContainer.size() << " motifs from disk";
+        cout << "\nMaximum motif size: " << motifContainer.getMaxMotifLen() << endl;
+
+        // compute the matrix tiles (only for empirical)
+        if (empirical)
+                motifContainer.generateMatrixTiles(settings.matrix_P_tile_min_size,
+                                                   settings.matrix_P_tile_min_area,
+                                                   settings.matrix_P_tile_min_zero_frac);
+
+        cout << "Using " << numThreads << " thread(s)" << endl;
+
+        // C) compute the histograms
         for (auto species : speciesContainer) {
-                cout << "Scanning species: " << species.getName() << endl;
-                cout << species.getTotalSeqLength() << endl;
+                cout << "Generating histograms for species: " << species.getName();
+                species.writeNuclProbabilities(settings.pseudocount);
 
-                // generate the PWM using the background counts for those species
-                for (auto& motif : motifContainer)
-                        motif.PFM2PWM(species.getNuclCounts(), pseudocounts);
-
-                // from these PWMs, generate the pattern matrix
-                motifContainer.generateMatrix(settings.matrix_P_tile_min_size,
-                                              settings.matrix_P_tile_min_area,
-                                              settings.matrix_P_tile_min_zero_frac);
+                // compute PWMs and generate the pattern matrix
+                motifContainer.generateMatrix(species.getNuclCounts(), settings.pseudocount);
 
                 // now generate score histograms for each motif
                 vector<ScoreHistogram> histContainer;
@@ -243,8 +251,10 @@ Histogram::Histogram(int argc, char ** argv) : maxLength(10000000), numBins(250)
                         histContainer.push_back(ScoreHistogram(m.getMinScore(), m.getMaxScore(), numBins));
                 }
 
-                //generateEmpiricalHist(species, motifContainer, histContainer);
-                generateTheoreticalHist(species, motifContainer, histContainer);
+                if (empirical)
+                        generateEmpiricalHist(species, motifContainer, histContainer);
+                else
+                        generateTheoreticalHist(species, motifContainer, histContainer);
 
                 // write all histograms to file
                 for (size_t i = 0; i < histContainer.size(); i++)

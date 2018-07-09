@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2017 Jan Fostier (jan.fostier@ugent.be)                 *
- *   This file is part of BLStools                                         *
+ *   Copyright (C) 2017-2018 Jan Fostier (jan.fostier@ugent.be)            *
+ *   This file is part of Blamm                                            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -29,20 +29,23 @@ using namespace std;
 
 void Dictionary::printUsage() const
 {
-        cout << "Usage: blstools dict [options] sequences.input\n\n";
+        cout << "Usage: blamm dict [options] sequences.input\n";
+        cout << "Goal: compute nucleotide frequencies for the input sequences "
+             << "and generate a sequence dictionary file\n\n";
 
         cout << " [options]\n";
-        cout << "  -h\t--help\t\tdisplay help message\n";
+        cout << "  -h\t--help\t\tdisplay help message\n\n";
 
-        cout << " File \"sequences.input\" should contain a list of input fasta files in the following format:\n";
+        cout << " File \"sequences.input\" contains a list of input"
+             << " fasta files in the following format:\n";
         cout << "   speciesID_1\tspecies1_sequences.fasta\n";
         cout << "   speciesID_2\tspecies2_sequences.fasta\n";
         cout << "   speciesID_3\tspecies2_sequences.fasta\n";
         cout << "   ...\n";
-        cout << "  (refer to the documentation for more info)\n\n";
+        cout << " where speciesID_x is a user-defined identifier per species\n\n";
 
         cout << " Example:\n";
-        cout << "  blstools dict sequences.input\n";
+        cout << "  blamm dict sequences.input\n\n";
 
         cout << "Report bugs to Jan Fostier <jan.fostier@ugent.be>\n";
 }
@@ -68,7 +71,7 @@ Dictionary::Dictionary(int argc, char ** argv)
                 }
         }
 
-        cout << "Welcome to blstools" << endl;
+        cout << "Welcome to blamm -- dictionary model" << endl;
 
         // read the manifest file
         SpeciesContainer species;

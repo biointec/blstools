@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2017 Jan Fostier (jan.fostier@ugent.be)                 *
- *   This file is part of BLStools                                         *
+ *   Copyright (C) 2017-2018 Jan Fostier (jan.fostier@ugent.be)            *
+ *   This file is part of Blamm                                            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -41,7 +41,8 @@ extern void kernel_wrapper(float *R, int m, int n, float *threshold, int* occIdx
 
 void PWMScan::printUsage() const
 {
-        cout << "Usage: blstools scan [options] motifs.input sequences.input\n\n";
+        cout << "Usage: blamm scan [options] motifs.input sequences.input\n";
+        cout << "Goal: find PWM matches in sequences\n\n";
 
         cout << " [options]\n";
         cout << "  -h\t--help\t\tdisplay help message\n";
@@ -67,10 +68,11 @@ void PWMScan::printUsage() const
         cout << "   speciesID_2\tspecies2_sequences.fasta\n";
         cout << "   speciesID_3\tspecies2_sequences.fasta\n";
         cout << "   ...\n";
-        cout << "  (refer to the documentation for more info)\n\n";
+        cout << " where speciesID_x is a user-defined identifier per species\n";
+        cout << " Refer to the documentation for more information\n\n";
 
         cout << " Example:\n";
-        cout << "  blstools scan -o occurences.txt motifs.input sequences.input\n\n";
+        cout << "  blamm scan -o occurences.txt motifs.input sequences.input\n\n";
 
         cout << "Report bugs to Jan Fostier <jan.fostier@ugent.be>\n";
 }
@@ -197,8 +199,6 @@ void PWMScan::scanThreadNaive(size_t speciesID, const MotifContainer& motifConta
 void PWMScan::scanPWMNaive(size_t speciesID, const MotifContainer& motifContainer,
                             FastaBatch& seqBatch)
 {
-        cout << "Using " << numThreads << " threads" << endl;
-
         // start histogram threads
         vector<thread> workerThreads(numThreads);
         for (size_t i = 0; i < workerThreads.size(); i++)
@@ -267,8 +267,6 @@ void PWMScan::scanThreadBLAS(size_t speciesID,
 void PWMScan::scanPWMBLAS(size_t speciesID, const MotifContainer& motifContainer,
                           FastaBatch& seqBatch)
 {
-        cout << "Using " << numThreads << " threads" << endl;
-
         // start histogram threads
         vector<thread> workerThreads(numThreads);
         for (size_t i = 0; i < workerThreads.size(); i++)
@@ -463,7 +461,7 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
         absThSpecified(false), absThreshold(0.0), relThSpecified(false),
         relThreshold(0.95), pvalueSpecified(false), pvalue(0.001),
         numThreads(thread::hardware_concurrency()), revCompl(false),
-        pseudocounts(1), totMatches(0)
+        totMatches(0)
 {
         // check for sufficient arguments
         if (argc < 4) {
@@ -519,8 +517,6 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
                 }
         }
 
-        cout << "Welcome to fast PWM scan" << endl;
-
         // If none of the thresholds is specified, default to relative threshold
         if (!(absThSpecified || relThSpecified || pvalueSpecified))
                 relThSpecified = true;
@@ -533,14 +529,16 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
         if (relThSpecified && pvalueSpecified)
                 throw runtime_error("Specify either the relative or p-value threshold, not both.");
 
-        // A) Load the manifest file
+        cout << "Welcome to blamm -- PWM scan module" << endl;
+
+        // A) load the manifest file
         string manifestFilename(argv[argc-1]);
         string dictFilename = manifestFilename + ".dict";
 
         SpeciesContainer speciesContainer;
         speciesContainer.load(dictFilename);
 
-        // B) Load the motifs
+        // B) load the motifs
         string motifFilename = string(argv[argc-2]);
 
         MotifContainer motifContainer(motifFilename, true);
@@ -549,57 +547,71 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
 
         if (revCompl) {
                 motifContainer.addReverseComplements();
-                cout << "Added reverse complementary motifs" << endl;
+                cout << "Scanning only the forward strand of the input sequence(s)" << endl;
+        } else {
+                cout << "Scanning both forward and reverse strand of the input sequence(s)" << endl;
         }
+
+        // compute the matrix tiles
+        motifContainer.generateMatrixTiles(settings.matrix_P_tile_min_size,
+                                           settings.matrix_P_tile_min_area,
+                                           settings.matrix_P_tile_min_zero_frac);
+
+        // write some information about the threshold
+        if (absThSpecified)
+                cout << "Absolute motif score threshold set to: " << absThreshold << endl;
+        else if (relThSpecified)
+                cout << "Relative motif score threshold set to: " << relThreshold << endl;
+        else if (pvalueSpecified)
+                cout << "P-value motif score threshold set to: " << pvalue << endl;
+
+        cout << "Using " << numThreads << " thread(s)" << endl;
 
        // motifContainer.writePossumFile("motifs.possum");
        // motifContainer.writeMOODSFiles();
 
-        // C) Scan the sequences
-        ofstream ofsCutoff("motifCutoff.txt");
+        // C) scan the sequences
+        ofstream ofsCutoff("PWMthresholds.txt");
 
         // start the output thread
         os.open(outputFilename.c_str());
 
         size_t speciesID = 0;
         for (auto species : speciesContainer) {
-                cout << "Scanning species: " << species.getName() << endl;
+                cout << "Scanning species: " << species.getName();
+                species.writeNuclProbabilities(settings.pseudocount);
 
-                // generate the PWM using the background counts for those species
-                for (auto& motif : motifContainer)
-                        motif.PFM2PWM(species.getNuclCounts(), pseudocounts);
+                // compute PWMs and generate the pattern matrix
+                motifContainer.generateMatrix(species.getNuclCounts(), settings.pseudocount);
 
                 // set or compute the thresholds
                 if (absThSpecified) {
-                        cout << "Absolute motif score threshold set to: " << absThreshold << endl;
                         for (auto& motif : motifContainer) {
                                 motif.setThreshold(absThreshold);
-                                ofsCutoff << species.getName() << "\t" << motif.getName() << "\t" << motif.getThreshold() << endl;
                         }
                 } else if (relThSpecified) {
-                        cout << "Relative motif score threshold set to: " << relThreshold << endl;
                         for (auto& motif : motifContainer) {
                                 float maxScore = motif.getMaxScore();
                                 float minScore = motif.getMinScore();
                                 float threshold = relThreshold * (maxScore - minScore) + minScore;
                                 motif.setThreshold(threshold);
-                                ofsCutoff << species.getName() << "\t" << motif.getName() << "\t" << motif.getThreshold() << endl;
                         }
                 } else if (pvalueSpecified) {
-                        cout << "P-value motif score threshold set to: " << pvalue << endl;
-
                         for (auto& motif : motifContainer) {
-                                ScoreHistogram hist(motif.getMinScore(), motif.getMaxScore(), 250);
+                                ScoreHistogram hist;
                                 hist.loadHistogram(histdir, "hist_" + species.getName() + "_" +  motif.getBaseName());
                                 motif.setThreshold(hist.getScoreCutoff(pvalue));
-                                ofsCutoff << species.getName() << "\t" << motif.getName() << "\t" << motif.getMinScore() << "\t" << motif.getThreshold() << "\t" << motif.getMaxScore() << endl;
                         }
                 }
 
-                // from these PWMs, generate the pattern matrix
-                motifContainer.generateMatrix(settings.matrix_P_tile_min_size,
-                                              settings.matrix_P_tile_min_area,
-                                              settings.matrix_P_tile_min_zero_frac);
+                // write the thresholds to disk
+                for (auto& motif : motifContainer) {
+                        if (motif.size() > 15)
+                                continue;
+                        ofsCutoff << species.getName() << "\t" << motif.getName() << "\t"
+                                  << motif.getMinScore() << "\t" << motif.getThreshold()
+                                  << "\t" << motif.getMaxScore() << endl;
+                }
 
                 vector<string> filenames = species.getSequenceFilenames();
                 FastaBatch seqBatch(filenames);

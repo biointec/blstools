@@ -184,21 +184,21 @@ void Motif::computeTheoreticalSpectrum(size_t numBins, const array<float, 4>& ba
         // generate the actual spectrum in the original score range
         spectrum.clear();
         for (const auto& it : nbocc[size()-1]) {
-                cout << it.first << "\t";
+                //cout << it.first << "\t";
                 float score = ((float)it.first - size()*b)/a;
-                cout << score << endl;
+                //cout << score << endl;
                 spectrum.insert(make_pair(score, it.second));
         }
 }
 
-void Motif::PFM2PWM(const std::array<size_t, 4>& bgCounts, size_t pseudoCounts)
+void Motif::PFM2PWM(const std::array<size_t, 4>& bgCounts, float pseudoCount)
 {
         // compute the background probability for ACGT
-        size_t bgTotCounts = accumulate(bgCounts.begin(), bgCounts.end(), 0ull);
-        bgTotCounts += 4 * pseudoCounts;
+        float bgTotCounts = (float)accumulate(bgCounts.begin(), bgCounts.end(), 0ull);
+        bgTotCounts += 4.0f * pseudoCount;
         array<float, 4> bgProb;
         for (size_t i = 0; i < 4; i++)
-                bgProb[i] = static_cast<double>(bgCounts[i] + pseudoCounts) / bgTotCounts;
+                bgProb[i] = (float(bgCounts[i]) + pseudoCount) / bgTotCounts;
 
         // if the motif is a reverse-complementary motif, also complement the bgProb
         if (revComp) {
@@ -208,15 +208,16 @@ void Motif::PFM2PWM(const std::array<size_t, 4>& bgCounts, size_t pseudoCounts)
 
         // compute the PWM
         PWM.resize(PFM.size());
+        PPM.resize(PFM.size());
         for (size_t i = 0; i < PFM.size(); i++) {
-                size_t totCounts = accumulate(PFM[i].begin(), PFM[i].end(), 0ull);
-                totCounts += 4 * pseudoCounts;
+                float totCounts = (float)accumulate(PFM[i].begin(), PFM[i].end(), 0ull);
+                totCounts += 4.0f * pseudoCount;
 
                 for (size_t j = 0; j < 4; j++) {
                         // compute the PPM
-                        PWM[i][j] = static_cast<double>(PFM[i][j] + pseudoCounts) / totCounts;
+                        PPM[i][j] = (float(PFM[i][j]) + pseudoCount) / totCounts;
                         // and convert to PWM
-                        PWM[i][j] = log2(PWM[i][j] / bgProb[j]);
+                        PWM[i][j] = log2(PPM[i][j] / bgProb[j]);
                 }
         }
 }
@@ -297,9 +298,20 @@ void Motif::writeMOODSFile(const std::string& filename) const
 
 ostream& operator<< (ostream& os, const Motif& m)
 {
+        cout.precision(2);
         os << m.name << "\n";
         for (auto pos : m.PWM)
-                os << pos[0] << " " << pos[1] << " " << pos[2] << " " << pos[3] << "\n";
+                os << fixed << pos[0] << " ";
+        os << "\n";
+        for (auto pos : m.PWM)
+                os << fixed << pos[1] << " ";
+        os << "\n";
+        for (auto pos : m.PWM)
+                os << fixed << pos[2] << " ";
+        os << "\n";
+        for (auto pos : m.PWM)
+                os << fixed << pos[3] << " ";
+        os << "\n";
         return os;
 }
 
@@ -317,9 +329,12 @@ MotifContainer::MotifContainer(const std::string& filename, bool loadPermutation
                 loadCBMotifs(filename, allMotifs);
 
         // copy the temporary allmotifs structure to motifs
+        size_t motifID = 0;
         for (const auto& motif : allMotifs) {
-                if (loadPermutations || !motif.isPermutation())
+                if (loadPermutations || !motif.isPermutation()) {
                         motifs.push_back(motif);
+                        motifs.back().setID(motifID++);
+                }
         }
 }
 
@@ -394,6 +409,33 @@ void MotifContainer::loadJasparMotifs(const std::string& filename,
                         motifs.back().addCharacter({freq[0][i], freq[1][i], freq[2][i], freq[3][i]});
         }
 
+        /*for (Motif& m : motifs) {
+                vector<string> consensus(m.getCount(), string(m.size(), 'A'));
+                vector<array<size_t, 4> > PFM = m.getPFM();
+
+                for (size_t j = 0; j < m.size(); j++) {
+                        size_t c = 0;
+                        // fill the As
+                        for (size_t i = 0; i < PFM[j][0]; i++)
+                                consensus[c++][j] = 'A';
+                        // fill the Cs
+                        for (size_t i = 0; i < PFM[j][1]; i++)
+                                consensus[c++][j] = 'C';
+                        // fill the Gs
+                        cout << c + PFM[j][2] << "\t" <<  m.getCount() << endl;
+                        for (size_t i = 0; i < PFM[j][2]; i++)
+                                consensus[c++][j] = 'G';
+                        // fill the Ts
+                        cout << c + PFM[j][3] << "\t" <<  m.getCount() << endl;
+                        for (size_t i = 0; i < PFM[j][3]; i++)
+                                consensus[c++][j] = 'T';
+                }
+
+                ofstream ofs(m.getName());
+                for (size_t i = 0; i < m.getCount(); i++)
+                        ofs << consensus[i] << "\n";
+        }*/
+
         sort(motifs.begin(), motifs.end());
 }
 
@@ -464,29 +506,17 @@ bool MotifContainer::keepSplit(const TilePair& tilePair, size_t tileMinSize,
         return true;
 }
 
-void MotifContainer::generateMatrix(size_t tileMinSize, size_t tileMinArea,
-                                    double tileMinZeroFrac)
+void MotifContainer::generateMatrixTiles(size_t tileMinSize,
+                                         size_t tileMinArea,
+                                         double tileMinZeroFrac)
 {
-        // allocate memory for matrix P
-        size_t m = motifs.size();
-        size_t k = 4 * getMaxMotifLen();
+        size_t nRows = 4 * getMaxMotifLen();
+        size_t nCols = motifs.size();
 
-        P.resize(k, m, 0.0f);
-
-        cout << "Matrix P has dimensions: " << k << " x " << m << endl;
-
-        // fill the matrix
-        for (size_t i = 0; i < motifs.size(); i++) {
-                // fill in the forward motif
-                const Motif& fwd = motifs[i];
-                for (size_t j = 0; j < fwd.size(); j++)
-                        for (size_t o = 0; o < 4; o++)
-                                P(4*j+o, i) = fwd[j][o];
-                col2MotifID.push_back(i);
-        }
+        cout << "Matrix P has dimensions: " << nRows << " x " << nCols << endl;
 
         matrixTiles.clear();
-        matrixTiles.push_back(MatrixTile(0, 0, P.nRows(), P.nCols()));
+        matrixTiles.push_back(MatrixTile(0, 0, nRows, nCols));
         while (true) {
                 vector<MatrixTile> newTiles;
                 bool didSomething = false;
@@ -516,10 +546,10 @@ void MotifContainer::generateMatrix(size_t tileMinSize, size_t tileMinArea,
 
         // compute the zero fraction
         size_t zeroElements = 0;
-        for (size_t i = 0; i < P.nCols(); i++)
-                zeroElements += P.nRows() - 4 * motifs[i].size();
+        for (size_t i = 0; i < nCols; i++)
+                zeroElements += nRows - 4 * motifs[i].size();
 
-        double zeroFrac = (double)zeroElements / (double)(P.nRows() * P.nCols());
+        double zeroFrac = (double)zeroElements / (double)(nRows * nCols);
         cout << "Matrix P initially contains " << 100.0*zeroFrac << "% zeros\n";
         cout << "Matrix P has been partitioned into " << matrixTiles.size() << " tile(s):\n";
 
@@ -527,8 +557,8 @@ void MotifContainer::generateMatrix(size_t tileMinSize, size_t tileMinArea,
                 cout << "\t" << it << "\n";
 
         for (const auto& it : matrixTiles)
-                zeroElements -= (P.nRows() - it.rowEnd) * (it.colEnd - it.colStart);
-        zeroFrac = (double)zeroElements / (double)(P.nRows() * P.nCols());
+                zeroElements -= (nRows - it.rowEnd) * (it.colEnd - it.colStart);
+        zeroFrac = (double)zeroElements / (double)(nRows * nCols);
         cout << "Tiled matrix P contains " << 100.0*zeroFrac << "% zeros\n";
 
         cout.precision(oldPrecision);
@@ -536,6 +566,32 @@ void MotifContainer::generateMatrix(size_t tileMinSize, size_t tileMinArea,
         /*ofstream ofs("hist.dat");
         for (size_t i = 0; i < height.size(); i++)
                 ofs << i+1 << "\t" << height[i] << "\n";*/
+}
+
+void MotifContainer::generateMatrix(const std::array<size_t, 4>& bgCounts,
+                                    float pseudoCount)
+{
+        // compute the PWM for each motif
+        for (auto& motif : motifs) {
+                motif.PFM2PWM(bgCounts, pseudoCount);
+                cout << motif << endl;
+        }
+
+        // allocate memory for matrix P
+        size_t nRows = 4 * getMaxMotifLen();
+        size_t nCols = motifs.size();
+        P.resize(nRows, nCols, 0.0f);
+
+        // fill the matrix
+        col2MotifID.clear();
+        for (size_t i = 0; i < motifs.size(); i++) {
+                // fill in the forward motif
+                const Motif& fwd = motifs[i];
+                for (size_t j = 0; j < fwd.size(); j++)
+                        for (size_t o = 0; o < 4; o++)
+                                P(4*j+o, i) = fwd[j][o];
+                col2MotifID.push_back(i);
+        }
 }
 
 void MotifContainer::writeMotifNames(const std::string& filename)

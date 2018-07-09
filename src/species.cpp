@@ -1,6 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2017 Jan Fostier (jan.fostier@ugent.be)                 *
- *   This file is part of BLStools                                         *
+ *   Copyright (C) 2017-2018 Jan Fostier (jan.fostier@ugent.be)            *
+ *   This file is part of Blamm                                            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -60,6 +60,27 @@ void Species::computeNucleotideComposition()
         seqNames = batch.getSeqNames();
 }
 
+std::array<float, 4> Species::getNuclProbabilities(float pseudoCount) const
+{
+        float bgTotCounts = (float)accumulate(nuclCounts.begin(), nuclCounts.end(), 0ull);
+        bgTotCounts += 4.0f * pseudoCount;
+        std::array<float, 4> bgProb;
+        for (size_t i = 0; i < 4; i++)
+                bgProb[i] = (float(nuclCounts[i]) + pseudoCount) / bgTotCounts;
+        return bgProb;
+}
+
+void Species::writeNuclProbabilities(float pseudoCount) const
+{
+        array<float, 4> bgProb = getNuclProbabilities(pseudoCount);
+        auto oldPrec = cout.precision();
+        cout.precision(3);
+        cout << " [A: " << 100.0f*bgProb[0] << "%, C: " << 100.0f*bgProb[1]
+             << "%, G: " << 100.0f*bgProb[2] << "%, T: " << 100.0f*bgProb[3]
+             << "%]\n";
+        cout.precision(oldPrec);
+}
+
 void Species::write(std::ofstream& ofs) const
 {
         ofs << "SPECIES" << "\t" << name << "\n";
@@ -103,8 +124,6 @@ void Species::load(std::ifstream& ifs)
         // total sequence length
         ifs >> temp >> totSeqLen;
         assert(temp == "TOT_SEQ_LENGTH");
-
-        cout << " LOADED " << totSeqLen << endl;
 
         // nucleotide composition
         ifs >> temp >> nuclCounts[0] >> nuclCounts[1] >> nuclCounts[2]

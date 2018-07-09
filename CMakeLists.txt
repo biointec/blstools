@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 2.8)
-project(blstools)
+project(BLAMM)
 
 # project version
-set(${PROJECT_NAME}_MAJOR_VERSION 0)
-set(${PROJECT_NAME}_MINOR_VERSION 3)
+set(${PROJECT_NAME}_MAJOR_VERSION 1)
+set(${PROJECT_NAME}_MINOR_VERSION 0)
 set(${PROJECT_NAME}_PATCH_LEVEL 0)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
@@ -21,9 +21,9 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 include(cmake/FortranScheme.cmake)
 
 # set some definitions
-add_definitions("-DBLSTOOLS_MAJOR_VERSION=${${PROJECT_NAME}_MAJOR_VERSION}")
-add_definitions("-DBLSTOOLS_MINOR_VERSION=${${PROJECT_NAME}_MINOR_VERSION}")
-add_definitions("-DBLSTOOLS_PATCH_LEVEL=${${PROJECT_NAME}_PATCH_LEVEL}")
+add_definitions("-D${PROJECT_NAME}_MAJOR_VERSION=${${PROJECT_NAME}_MAJOR_VERSION}")
+add_definitions("-D${PROJECT_NAME}_MINOR_VERSION=${${PROJECT_NAME}_MINOR_VERSION}")
+add_definitions("-D${PROJECT_NAME}_PATCH_LEVEL=${${PROJECT_NAME}_PATCH_LEVEL}")
 
 # set the MKL definition
 if (HAVE_MKL)
@@ -63,17 +63,17 @@ if (CUDA_FOUND)
 
         include_directories(${CUDA_INCLUDE_DIRS})
 
-        cuda_add_executable(blstools src/dict.cpp src/hist.cpp src/blstools.cpp
+        cuda_add_executable(blamm src/dict.cpp src/hist.cpp src/blstools.cpp
                 src/bls.cpp src/phylotree.cpp src/matrix.cpp src/pwmscan.cpp
                 src/motif.cpp src/sequence.cpp  src/ortho.cpp src/species.cpp
                 src/kernel.cu src/settings.cpp)
-        target_link_libraries(blstools ${BLAS_LIBRARIES} ${CUDA_LIBRARIES}
+        target_link_libraries(blamm ${BLAS_LIBRARIES} ${CUDA_LIBRARIES}
                 ${CUDA_CUBLAS_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
-        install(TARGETS blstools RUNTIME DESTINATION bin)
+        install(TARGETS blamm RUNTIME DESTINATION bin)
 else()  # No CUDA support
-        add_executable(blstools src/dict.cpp src/hist.cpp src/blstools.cpp src/bls.cpp
+        add_executable(blamm src/dict.cpp src/hist.cpp src/blstools.cpp src/bls.cpp
                 src/phylotree.cpp src/matrix.cpp src/pwmscan.cpp src/motif.cpp
                 src/sequence.cpp  src/ortho.cpp src/species.cpp src/settings.cpp)
-        target_link_libraries(blstools ${BLAS_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
-        install(TARGETS blstools RUNTIME DESTINATION bin)
+        target_link_libraries(blamm ${BLAS_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+        install(TARGETS blamm RUNTIME DESTINATION bin)
 endif()
