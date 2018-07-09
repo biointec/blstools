@@ -572,10 +572,8 @@ void MotifContainer::generateMatrix(const std::array<size_t, 4>& bgCounts,
                                     float pseudoCount)
 {
         // compute the PWM for each motif
-        for (auto& motif : motifs) {
+        for (auto& motif : motifs)
                 motif.PFM2PWM(bgCounts, pseudoCount);
-                cout << motif << endl;
-        }
 
         // allocate memory for matrix P
         size_t nRows = 4 * getMaxMotifLen();
