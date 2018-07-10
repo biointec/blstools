@@ -319,7 +319,7 @@ ostream& operator<< (ostream& os, const Motif& m)
 // MOTIF CONTAINER
 // ============================================================================
 
-MotifContainer::MotifContainer(const std::string& filename, bool loadPermutations)
+void MotifContainer::load(const std::string& filename, bool loadPermutations)
 {
         vector<Motif> allMotifs;
 

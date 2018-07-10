@@ -224,7 +224,8 @@ Histogram::Histogram(int argc, char ** argv) : maxLength(10000000), numBins(250)
         // B) Load the motifs
         string motifFilename = string(argv[argc-2]);
 
-        MotifContainer motifContainer(motifFilename, false);    // no permutations!
+        MotifContainer motifContainer;
+        motifContainer.load(motifFilename, false);    // no permutations!
         cout << "Loaded " << motifContainer.size() << " motifs from disk";
         cout << "\nMaximum motif size: " << motifContainer.getMaxMotifLen() << endl;
 

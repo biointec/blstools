@@ -28,6 +28,7 @@
 #include "motif.h"
 #include "sequence.h"
 #include "settings.h"
+#include "species.h"
 
 // ============================================================================
 // CLASS PROTOTYPES
@@ -42,39 +43,32 @@ class SpeciesContainer;
 class PWMScan
 {
 private:
-        Settings settings;
+        Settings settings;              // settings object
+        MotifContainer motifContainer;  // motif container
+        SpeciesContainer speciesContainer;      // species container
 
-        bool simpleMode;
-        bool cudaMode;
+        bool simpleMode;                // naive algorithm (non-BLAS)
+        bool cudaMode;                  // CUDA version
 
-        std::string outputFilename;
+        std::mutex myMutex;             // mutex object
+        size_t totMatches;              // total number of matches
+        std::string outputFilename;     // occurrences filename
+        std::ofstream os;               // output stream
+        std::vector<MotifOccurrence> buffer;    // temporary buffer
 
-        bool absThSpecified;
-        float absThreshold;
+        bool absThSpecified;            // absolute PWM threshold specified
+        float absThreshold;             // asbolute PWM threshold
 
-        bool relThSpecified;
-        float relThreshold;
+        bool relThSpecified;            // relative PWM threshold specified
+        float relThreshold;             // relative PWM threshold
 
-        bool pvalueSpecified;
-        float pvalue;
+        bool pvalueSpecified;           // p-value threshold specified
+        float pvalue;                   // p-value threshold
 
-        std::string histdir;    // histogram directory
+        std::string histdir;            // histogram directory
 
-        size_t numThreads;
-
-        bool revCompl;
-
-        size_t m;               // number of motifs
-        size_t n;               // choose freely
-        size_t k;               // maximum motif length
-        size_t overlap;         // overlap
-        size_t K;               // choose freely
-
-        std::mutex myMutex;
-        std::ofstream os;
-        size_t totMatches;
-
-        std::vector<MotifOccurrence> buffer;
+        size_t numThreads;              // number of threads used
+        bool revCompl;                  // scan both directions (fwd/bwd)
 
         /**
          * Print module instructions
@@ -83,57 +77,65 @@ private:
 
         /**
          * Write the occurrences to disk
-         * @param speciesID Species identifier
          * @param occurrences Occurrences to write
          */
-        void writeOccToDisk(size_t speciesID,
-                            const std::vector<MotifOccurrence> occurrences);
+        void writeOccToDisk(const std::vector<MotifOccurrence> occurrences);
 
         /**
          * Given a result matrix, extract the PWM occurrences
          * @param R Result matrix R
-         * @param offset Offset used to generate R = P * sub(S)
+         * @param offset Offset used to generate R = sub(S) * P
+         * @param speciesID Species identifier
          * @param sm Sequence matrix
-         * @param motifContainer Motif container
-         * @param motifOcc Vector containing all motif occurrences
+         * @param motifOcc Vector containing all motif occurrences (output)
          */
         void extractOccurrences(const Matrix& R, size_t offset,
-                                SeqMatrix& sm,
-                                const MotifContainer& motifContainer,
+                                size_t speciesID, SeqMatrix& sm,
                                 std::vector<MotifOccurrence>& motifOcc);
+
+        /**
+         * Given a compacted occurrence stream, extract the PWM occurrences
+         * @param LDR Leading dimension of matrix R
+         * @param offset_v Vector with offsets
+         * @param occIdx Occurrence index (in R)
+         * @param occScore Occurrence PWM occScore
+         * @param speciesID Species identifier
+         * @param sm Sequence matrix
+         * @param motifOcc Vector containing all motif occurrences (output)
+         */
+        void extractOccurrences2(int LDR, const std::map<int, int>& offset_v,
+                                 int *occIdx, float *occScore, size_t speciesID,
+                                 SeqMatrix& sm, std::vector<MotifOccurrence>& motifOcc);
 
         /**
          * Thread function that does the actual scanning (BLAS algorithm)
          * @param speciesID Species identifier
-         * @param motifContainer Motif MotifContainer
          * @param seqBatch Fasta sequence batch
          */
-        void scanThreadBLAS(size_t speciesID, const MotifContainer& motifContainer,
-                        FastaBatch& seqBatch);
+        void scanThreadBLAS(size_t speciesID,
+                            const MotifContainer& motifContainer,
+                            FastaBatch& seqBatch);
 
         /**
          * Thread function that does the actual scanning (naive algorithm)
          * @param speciesID Species identifier
-         * @param motifContainer Motif MotifContainer
          * @param seqBatch Fasta sequence batch
          */
-        void scanThreadNaive(size_t speciesID, const MotifContainer& motifContainer,
+        void scanThreadNaive(size_t speciesID,
                              FastaBatch& seqBatch);
 
         /**
          * Scan sequences for PWM occurrences using BLAS
-         * @param motifContainer Motif MotifContainer
          * @param seqBatch Fasta sequence batch
          */
-        void scanPWMBLAS(size_t speciesID, const MotifContainer& motifContainer,
+        void scanPWMBLAS(size_t speciesID,
                          FastaBatch& seqBatch);
 
         /**
          * Scan sequences for PWM occurrences using the naive algorithm
-         * @param motifContainer Motif MotifContainer
          * @param seqBatch Fasta sequence batch
          */
-        void scanPWMNaive(size_t speciesID, const MotifContainer& motifContainer,
+        void scanPWMNaive(size_t speciesID,
                           FastaBatch& seqBatch);
 
 #ifdef HAVE_CUDA
@@ -141,22 +143,18 @@ private:
          * Thread function that does the actual scanning (CUBLAS algorithm)
          * @param devID Device ID
          * @param speciesID Species identifier
-         * @param motifContainer Motif MotifContainer
          * @param seqBatch Fasta sequence batch
          */
         void scanThreadCUBLAS(int devID, size_t speciesID,
-                              const MotifContainer& motifContainer,
                               FastaBatch& seqBatch);
 
         /**
          * Scan sequences for PWM occurrences using CUBLAS
-         * @param motifContainer Motif MotifContainer
          * @param seqBatch Fasta sequence batch
          */
-        void scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContainer,
+        void scanPWMCUBLAS(size_t speciesID,
                            FastaBatch& seqBatch);
 #endif
-
 
 public:
         /**

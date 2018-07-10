@@ -33,7 +33,8 @@ using namespace std;
 
 Settings::Settings() : matrix_S_w(250), matrix_S_h(1000),
         matrix_P_tile_min_size(32), matrix_P_tile_min_area(128*128),
-        matrix_P_tile_min_zero_frac(0.1), pseudocount(0.25f), defaultVal(true)
+        matrix_P_tile_min_zero_frac(0.1), pseudocount(0.25f),
+        num_output_tasks(10), defaultVal(true)
 {
         ifstream ifs("settings.cnf");
         if (!ifs)
@@ -72,6 +73,8 @@ Settings::Settings() : matrix_S_w(250), matrix_S_h(1000),
                         iss >> matrix_P_tile_min_zero_frac;
                 } else if (key == "PSEUDOCOUNT") {
                         iss >> pseudocount;
+                } else if (key == "NUM_OUTPUT_TASKS") {
+                        iss >> num_output_tasks;
                 } else {
                         cerr << "WARNING: settings.cnf contains unknown key: " << key << endl;
                 }
@@ -90,5 +93,6 @@ void Settings::printSettings()
         cout << "\tMATRIX_P_TILE_MIN_SIZE\t" << matrix_P_tile_min_size << "\n";
         cout << "\tMATRIX_P_TILE_MIN_AREA\t" << matrix_P_tile_min_area << "\n";
         cout << "\tMATRIX_P_TILE_MIN_ZERO_FRAC\t" << matrix_P_tile_min_zero_frac << "\n";
-        cout << "\tPSEUDOCOUNT\t" << pseudocount << endl;
+        cout << "\tPSEUDOCOUNT\t" << pseudocount << "\n";
+        cout << "\tNUM_OUTPUT_TASKS\t" << num_output_tasks << endl;
 }

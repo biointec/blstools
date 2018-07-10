@@ -438,11 +438,16 @@ private:
 
 public:
         /**
-         * Create a motif file from disk
+         * Default constructor
+         */
+        MotifContainer() {}
+
+        /**
+         * Load a motif file from disk
          * @param filename Filename of the motif input file
          * @param loadPermutations Also load the random permutations
          */
-        MotifContainer(const std::string& filename, bool loadPermutations);
+        void load(const std::string& filename, bool loadPermutations);
 
         /**
          * Load cluster-buster motifs from disk

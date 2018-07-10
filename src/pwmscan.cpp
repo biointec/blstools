@@ -53,8 +53,8 @@ void PWMScan::printUsage() const
         cout << " [options arg]\n";
         cout << "  -at\t--absthreshold\tset the minimal absolute score for a motif occurrence\n";
         cout << "  -rt\t--relthreshold\tset the minimal relative score [0..1] for a motif occurrence (default = 0.95)\n";
-        cout << "  -pt\t--pthreshold\tcompute the motif score threshold from p-value [0..1]\n";
-        cout << "  -t\t--numthreads\tset the number of parallel threads [default =  #cores]\n\n";
+        cout << "  -pt\t--pthreshold\tcompute the motif score threshold from p-value [0..1] (default = 1E-4)\n";
+        cout << "  -t\t--numthreads\tset the number of parallel threads [default = #cores]\n\n";
 
         cout << " [file_options]\n";
         cout << "  -H\t--histdir\tdirectory where the histogram file(s) are stored [default = .]\n";
@@ -77,24 +77,26 @@ void PWMScan::printUsage() const
         cout << "Report bugs to Jan Fostier <jan.fostier@ugent.be>\n";
 }
 
-void PWMScan::writeOccToDisk(size_t speciesID,
-                             const std::vector<MotifOccurrence> occurrences)
+void PWMScan::writeOccToDisk(const std::vector<MotifOccurrence> occurrences)
 {
+        const MotifContainer& mc = motifContainer;
+        const SpeciesContainer& sc = speciesContainer;
+
         // produce a string outside the mutex
         ostringstream oss;
         for (auto o : occurrences) {
-                oss << o.getMotifID() << "\t" << speciesID << "\t"
+                /*oss << o.getMotifID() << "\t" << speciesID << "\t"
                     << o.getSequenceID() << "\t" << o.getSequencePos()
-                    << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";
+                    << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";*/
 
                 // KLAAS' FORMAT
-                /*oss << sc[o.getSpeciesID()].getSeqName(o.getSequenceID()) << "\t"
-                    << "blstools\t"
+                oss << sc[o.getSpeciesID()].getSeqName(o.getSequenceID()) << "\t"
+                    << "blamm\t"
                     << mc[o.getMotifID()].getName() << "\t"
                     << o.getSequencePos() << "\t"
                     << o.getSequencePos() + mc[o.getMotifID()].size() << "\t"
                     << o.getScore() << "\t"
-                    << o.getStrand() << "\t.\t.\n";*/
+                    << o.getStrand() << "\t.\t.\n";
         }
 
         // dump the string to disk under mutex protection
@@ -104,8 +106,7 @@ void PWMScan::writeOccToDisk(size_t speciesID,
 }
 
 void PWMScan::extractOccurrences(const Matrix& R, size_t offset,
-                                 SeqMatrix& sm,
-                                 const MotifContainer& motifContainer,
+                                 size_t speciesID, SeqMatrix& sm,
                                  vector<MotifOccurrence>& motifOcc)
 {
         for (size_t j = 0; j < R.nCols(); j++) {
@@ -129,17 +130,15 @@ void PWMScan::extractOccurrences(const Matrix& R, size_t offset,
                                 continue;
 
                         char strand = m.isRevCompl() ? '-' : '+';
-
-                        motifOcc.push_back(MotifOccurrence(m.getID(), 0, seqPos.getSeqIndex(),
+                        motifOcc.push_back(MotifOccurrence(m.getID(), speciesID, seqPos.getSeqIndex(),
                                                            seqPos.getSeqPos(), strand, thisScore));
                 }
         }
 }
 
-void extractOccurrences2(int m, const map<int, int>& offset_v, int *occIdx,
-                         float *occScore, SeqMatrix& sm,
-                         const MotifContainer& motifContainer,
-                         vector<MotifOccurrence>& motifOcc)
+void PWMScan::extractOccurrences2(int LDR, const map<int, int>& offset_v,
+                                  int *occIdx, float *occScore, size_t speciesID,
+                                  SeqMatrix& sm, vector<MotifOccurrence>& motifOcc)
 {
         int idx = 0;
         for (const auto& it: offset_v) {
@@ -148,8 +147,8 @@ void extractOccurrences2(int m, const map<int, int>& offset_v, int *occIdx,
 
                 for (int c = 0; c < thisOcc; c++, idx++) {
                         float thisScore = occScore[idx];
-                        int i = occIdx[idx] % m;        // row in R
-                        int j = occIdx[idx] / m;        // col in R
+                        int i = occIdx[idx] % LDR;        // row in R
+                        int j = occIdx[idx] / LDR;        // col in R
 
                         size_t motifIdx = motifContainer.getMotifIDAtCol(j);
                         const Motif& m = motifContainer[motifIdx];
@@ -161,15 +160,13 @@ void extractOccurrences2(int m, const map<int, int>& offset_v, int *occIdx,
                                 continue;
 
                         char strand = m.isRevCompl() ? '-' : '+';
-
-                        motifOcc.push_back(MotifOccurrence(m.getID(), 0, seqPos.getSeqIndex(),
+                        motifOcc.push_back(MotifOccurrence(m.getID(), speciesID, seqPos.getSeqIndex(),
                                                            seqPos.getSeqPos(), strand, thisScore));
                 }
         }
 }
 
-void PWMScan::scanThreadNaive(size_t speciesID, const MotifContainer& motifContainer,
-                              FastaBatch& seqBatch)
+void PWMScan::scanThreadNaive(size_t speciesID, FastaBatch& seqBatch)
 {
         vector<MotifOccurrence> occurrences;
 
@@ -186,27 +183,25 @@ void PWMScan::scanThreadNaive(size_t speciesID, const MotifContainer& motifConta
 
                                 char strand = m.isRevCompl() ? '-' : '+';
 
-                                occurrences.push_back(MotifOccurrence(m.getID(), 0, seqPos.getSeqIndex(),
+                                occurrences.push_back(MotifOccurrence(m.getID(), speciesID, seqPos.getSeqIndex(),
                                                                       seqPos.getSeqPos() + i, strand, thisScore));
                         }
                 }
 
-                writeOccToDisk(speciesID, occurrences);
+                writeOccToDisk(occurrences);
                 occurrences.clear();
 
                 cout << "."; cout.flush();
         }
 }
 
-void PWMScan::scanPWMNaive(size_t speciesID, const MotifContainer& motifContainer,
-                            FastaBatch& seqBatch)
+void PWMScan::scanPWMNaive(size_t speciesID, FastaBatch& seqBatch)
 {
         // start histogram threads
         vector<thread> workerThreads(numThreads);
         for (size_t i = 0; i < workerThreads.size(); i++)
-                workerThreads[i] = thread(&PWMScan::scanThreadNaive, this, speciesID,
-                                          cref(motifContainer),
-                                          ref(seqBatch));
+                workerThreads[i] = thread(&PWMScan::scanThreadNaive, this,
+                                          speciesID, ref(seqBatch));
 
         // wait for worker threads to finish
         for_each(workerThreads.begin(), workerThreads.end(), mem_fn(&thread::join));
@@ -255,18 +250,18 @@ void PWMScan::scanThreadBLAS(size_t speciesID,
                                 p.A_array[i] = sm.getData() + 4*offset*p.LDA[i];
 
                         Matrix::sgemm_batch(p);
-                        extractOccurrences(R, offset, sm, motifContainer, occurrences);
+                        extractOccurrences(R, offset, speciesID, sm, occurrences);
                 }
 
                 // write the occurrences to disk
-                writeOccToDisk(speciesID, occurrences);
+                writeOccToDisk(occurrences);
                 occurrences.clear();
 
                 cout << "."; cout.flush();
         }
 }
 
-void PWMScan::scanPWMBLAS(size_t speciesID, const MotifContainer& motifContainer,
+void PWMScan::scanPWMBLAS(size_t speciesID,
                           FastaBatch& seqBatch)
 {
         // start histogram threads
@@ -365,7 +360,7 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
 
         map<int, int> offset_v;
 
-        size_t nOutputTasks = 10;       // FIXME: derive from available number of threads
+        size_t nOutputTasks = settings.num_output_tasks;
         vector<future<void> > outputTask(nOutputTasks);
         size_t currOutputTask = 0;
 
@@ -391,7 +386,7 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
                         // get the results
                         cublasGetVector(nOcc, sizeof(float), d_occScore, 1, occScore, 1);
                         cublasGetVector(nOcc, sizeof(int), d_occIdx, 1, occIdx, 1);
-                        extractOccurrences2(R.nRows(), offset_v, occIdx, occScore, sm, motifContainer, occurrences);
+                        extractOccurrences2(R.nRows(), offset_v, occIdx, occScore, speciesID, sm, motifContainer, occurrences);
                         offset_v.clear();
                         nOcc = 0;
                         cublasSetVector(1, sizeof(int), &nOcc, 1, d_nOcc, 1);
@@ -400,7 +395,7 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
                 // write the output to disk
                 if (outputTask[currOutputTask].valid())
                         outputTask[currOutputTask].get();
-                outputTask[currOutputTask] = async(launch::async, &PWMScan::writeOccToDisk, this, speciesID, occurrences);
+                outputTask[currOutputTask] = async(launch::async, &PWMScan::writeOccToDisk, this, occurrences);
                 currOutputTask = (currOutputTask + 1) % nOutputTasks;
 
                 occurrences.clear();
@@ -438,10 +433,6 @@ void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContain
                 return;
         }
 
-        // limit the number of devices to the number of threads specified
-        if (numThreads < (size_t)numDevices)
-                numDevices = numThreads;
-
         cout << "Using " << numDevices << " GPU devices" << endl;
 
         // start one thread per GPU device
@@ -459,11 +450,10 @@ void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContain
 #endif
 
 PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
-        outputFilename("occurrences.txt"),
+        totMatches(0), outputFilename("occurrences.txt"),
         absThSpecified(false), absThreshold(0.0), relThSpecified(false),
-        relThreshold(0.95), pvalueSpecified(false), pvalue(0.001),
-        numThreads(thread::hardware_concurrency()), revCompl(false),
-        totMatches(0)
+        relThreshold(0.95), pvalueSpecified(false), pvalue(0.0001),
+        numThreads(thread::hardware_concurrency()), revCompl(false)
 {
         // check for sufficient arguments
         if (argc < 4) {
@@ -536,22 +526,19 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
         // A) load the manifest file
         string manifestFilename(argv[argc-1]);
         string dictFilename = manifestFilename + ".dict";
-
-        SpeciesContainer speciesContainer;
         speciesContainer.load(dictFilename);
 
         // B) load the motifs
         string motifFilename = string(argv[argc-2]);
-
-        MotifContainer motifContainer(motifFilename, true);
+        motifContainer.load(motifFilename, true);
         cout << "Loaded " << motifContainer.size() << " motifs from disk\n";
         cout << "Maximum motif size: " << motifContainer.getMaxMotifLen() << endl;
 
         if (revCompl) {
                 motifContainer.addReverseComplements();
-                cout << "Scanning only the forward strand of the input sequence(s)" << endl;
-        } else {
                 cout << "Scanning both forward and reverse strand of the input sequence(s)" << endl;
+        } else {
+                cout << "Scanning only the forward strand of the input sequence(s)" << endl;
         }
 
         // compute the matrix tiles
@@ -568,8 +555,6 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
                 cout << "P-value motif score threshold set to: " << pvalue << endl;
 
         cout << "Using " << numThreads << " thread(s)" << endl;
-
-       // motifContainer.writeMOODSFiles();
 
         // C) scan the sequences
         ofstream ofsCutoff("PWMthresholds.txt");
@@ -621,16 +606,16 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
 
                 // scan the sequences for PWM occurrences
                 if (simpleMode) {
-                        scanPWMNaive(speciesID++, motifContainer, seqBatch);
+                        scanPWMNaive(speciesID++, seqBatch);
                 } else if (cudaMode) {
 #ifdef HAVE_CUDA
-                        scanPWMCUBLAS(speciesID++, motifContainer, seqBatch);
+                        scanPWMCUBLAS(speciesID++, seqBatch);
 #else
                         cerr << "ERROR: CUDA support not enabled\n";
                         cerr << "Please recompile with CUDA support enabled" << endl;
 #endif
                 } else {
-                        scanPWMBLAS(speciesID++, motifContainer, seqBatch);
+                        scanPWMBLAS(speciesID++, seqBatch);
                 }
         }
 

@@ -160,7 +160,8 @@ Ortho::Ortho(int argc, char ** argv)
         string occFilename = argv[argc-1];
 
         // A) Load the motifs
-        MotifContainer motifContainer(motifFilename, true);
+        MotifContainer motifContainer;
+        motifContainer.load(motifFilename, true);
         cout << "Loaded " << motifContainer.size() << " motifs from disk\n";
 
         // B) Load the manifest file
