@@ -279,7 +279,6 @@ void PWMScan::scanPWMBLAS(size_t speciesID,
 
 #ifdef HAVE_CUDA
 void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
-                               const MotifContainer& motifContainer,
                                FastaBatch& seqBatch)
 {
         float *d_P = 0, *d_S = 0, *d_R = 0;
@@ -422,7 +421,7 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
         cublasDestroy(handle);
 }
 
-void PWMScan::scanPWMCUBLAS(size_t speciesID, const MotifContainer& motifContainer,
+void PWMScan::scanPWMCUBLAS(size_t speciesID,
                             FastaBatch& seqBatch)
 {
         int numDevices;
