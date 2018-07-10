@@ -385,7 +385,7 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
                         // get the results
                         cublasGetVector(nOcc, sizeof(float), d_occScore, 1, occScore, 1);
                         cublasGetVector(nOcc, sizeof(int), d_occIdx, 1, occIdx, 1);
-                        extractOccurrences2(R.nRows(), offset_v, occIdx, occScore, speciesID, sm, motifContainer, occurrences);
+                        extractOccurrences2(R.nRows(), offset_v, occIdx, occScore, speciesID, sm, occurrences);
                         offset_v.clear();
                         nOcc = 0;
                         cublasSetVector(1, sizeof(int), &nOcc, 1, d_nOcc, 1);
