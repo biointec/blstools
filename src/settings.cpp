@@ -23,7 +23,7 @@
 #include <string>
 #include <fstream>
 #include <iostream>
-#include <regex>
+#include <sstream>
 
 using namespace std;
 
@@ -45,9 +45,6 @@ Settings::Settings() : matrix_S_w(250), matrix_S_h(1000),
         while (ifs) {
                 string line;
                 getline(ifs, line);
-
-                // remove leading spaces
-                line = regex_replace(line, regex("^ +"), string(""));
 
                 // skip empty lines
                 if (line.empty())

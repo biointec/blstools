@@ -85,7 +85,7 @@ void PWMScan::writeOccToDisk(const std::vector<MotifOccurrence> occurrences)
         // produce a string outside the mutex
         ostringstream oss;
         for (auto o : occurrences) {
-                /*oss << o.getMotifID() << "\t" << speciesID << "\t"
+                /*oss << o.getMotifID() << "\t" << o.getSpeciesID() << "\t"
                     << o.getSequenceID() << "\t" << o.getSequencePos()
                     << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";*/
 
@@ -520,6 +520,8 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
                 throw runtime_error("Specify either the relative or p-value threshold, not both.");
 
         cout << "Welcome to blamm -- PWM scan module" << endl;
+
+	settings.printSettings();
 
         // A) load the manifest file
         string manifestFilename(argv[argc-1]);
