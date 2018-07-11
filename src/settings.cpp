@@ -85,11 +85,11 @@ void Settings::printSettings()
         else
                 cout << "Loaded configuration from file settings.cnf" << endl;
 
-        cout << "\tMATRIX_S_W\t" << matrix_S_w << "\n";
-        cout << "\tMATRIX_S_H\t" << matrix_S_h << "\n";
-        cout << "\tMATRIX_P_TILE_MIN_SIZE\t" << matrix_P_tile_min_size << "\n";
-        cout << "\tMATRIX_P_TILE_MIN_AREA\t" << matrix_P_tile_min_area << "\n";
+        cout << "\tMATRIX_S_W\t\t" << matrix_S_w << "\n";
+        cout << "\tMATRIX_S_H\t\t" << matrix_S_h << "\n";
+        cout << "\tMATRIX_P_TILE_MIN_SIZE\t\t" << matrix_P_tile_min_size << "\n";
+        cout << "\tMATRIX_P_TILE_MIN_AREA\t\t" << matrix_P_tile_min_area << "\n";
         cout << "\tMATRIX_P_TILE_MIN_ZERO_FRAC\t" << matrix_P_tile_min_zero_frac << "\n";
-        cout << "\tPSEUDOCOUNT\t" << pseudocount << "\n";
+        cout << "\tPSEUDOCOUNT\t\t" << pseudocount << "\n";
         cout << "\tNUM_OUTPUT_TASKS\t" << num_output_tasks << endl;
 }

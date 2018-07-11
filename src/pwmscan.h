@@ -77,9 +77,17 @@ private:
 
         /**
          * Write the occurrences to disk
-         * @param occurrences Occurrences to write
+         * @param occurrences Occurrences to write (const-ref)
          */
-        void writeOccToDisk(const std::vector<MotifOccurrence> occurrences);
+        void writeOccToDisk(const std::vector<MotifOccurrence>& occurrences);
+
+        /**
+         * Write the occurrences to disk
+         * @param occurrences Occurrences to write (COPY)
+         */
+        void writeOccToDiskCopy(const std::vector<MotifOccurrence> occurrences) {
+                writeOccToDisk(occurrences);
+        }
 
         /**
          * Given a result matrix, extract the PWM occurrences

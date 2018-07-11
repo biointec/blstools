@@ -77,7 +77,7 @@ void PWMScan::printUsage() const
         cout << "Report bugs to Jan Fostier <jan.fostier@ugent.be>\n";
 }
 
-void PWMScan::writeOccToDisk(const std::vector<MotifOccurrence> occurrences)
+void PWMScan::writeOccToDisk(const std::vector<MotifOccurrence>& occurrences)
 {
         const MotifContainer& mc = motifContainer;
         const SpeciesContainer& sc = speciesContainer;
@@ -394,7 +394,7 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
                 // write the output to disk
                 if (outputTask[currOutputTask].valid())
                         outputTask[currOutputTask].get();
-                outputTask[currOutputTask] = async(launch::async, &PWMScan::writeOccToDisk, this, occurrences);
+                outputTask[currOutputTask] = async(launch::async, &PWMScan::writeOccToDiskCopy, this, occurrences);
                 currOutputTask = (currOutputTask + 1) % nOutputTasks;
 
                 occurrences.clear();
