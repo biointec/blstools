@@ -544,14 +544,16 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
 
         if (cudaMode) {
 #ifdef HAVE_CUDA
+                cudaGetDeviceCount(&numDevices);
+
                 if (numDevices == 0) {
                         cerr << "CUDA error: no devices found. Aborting..." << endl;
-                return;
+	                return;
+		}
 
-                cudaGetDeviceCount(&numDevices);
                 cout << "Using " << numDevices << " GPU devices" << endl;
 
-                numThreadsPerDevice = min<int>(numThreads / numDevices, 1);
+                numThreadsPerDevice = max<int>(numThreads / numDevices, 1);
                 cout << "Using " << numThreadsPerDevice << " CPU threads per GPU device" << endl;
 #else
                 cerr << "ERROR: CUDA support not enabled\n";
