@@ -249,6 +249,14 @@ public:
                    seqFiles(seqFiles) {}
 
         /**
+         * Get the progress in percentage
+         * @return Progress in percentage
+         */
+        float getProgressPerc() const {
+                return (float)_totFiltSeqLen / (float)_maxFiltSeqLen;
+        }
+
+        /**
          * Get the sequence names
          */
         const std::vector<std::string>& getSeqNames() const {

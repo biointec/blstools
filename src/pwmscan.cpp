@@ -85,11 +85,6 @@ void PWMScan::writeOccToDisk(const std::vector<MotifOccurrence>& occurrences)
         // produce a string outside the mutex
         ostringstream oss;
         for (auto o : occurrences) {
-                /*oss << o.getMotifID() << "\t" << o.getSpeciesID() << "\t"
-                    << o.getSequenceID() << "\t" << o.getSequencePos()
-                    << "\t" << o.getStrand() << "\t"  << o.getScore() << "\n";*/
-
-                // KLAAS' FORMAT
                 oss << sc[o.getSpeciesID()].getSeqName(o.getSequenceID()) << "\t"
                     << "blamm\t"
                     << mc[o.getMotifID()].getName() << "\t"
@@ -166,7 +161,9 @@ void PWMScan::extractOccurrences2(int LDR, const map<int, int>& offset_v,
         }
 }
 
-void PWMScan::scanThreadNaive(size_t speciesID, FastaBatch& seqBatch)
+void PWMScan::scanThreadNaive(size_t speciesID,
+                              ProgressIndicator& progInd,
+                              FastaBatch& seqBatch)
 {
         vector<MotifOccurrence> occurrences;
 
@@ -191,26 +188,27 @@ void PWMScan::scanThreadNaive(size_t speciesID, FastaBatch& seqBatch)
                 writeOccToDisk(occurrences);
                 occurrences.clear();
 
-                cout << "."; cout.flush();
+                progInd.printMessage(seqBatch.getProgressPerc());
         }
 }
 
 void PWMScan::scanPWMNaive(size_t speciesID, FastaBatch& seqBatch)
 {
         // start histogram threads
+        ProgressIndicator progInd;
         vector<thread> workerThreads(numThreads);
         for (size_t i = 0; i < workerThreads.size(); i++)
                 workerThreads[i] = thread(&PWMScan::scanThreadNaive, this,
-                                          speciesID, ref(seqBatch));
+                                          speciesID, ref(progInd), ref(seqBatch));
 
         // wait for worker threads to finish
         for_each(workerThreads.begin(), workerThreads.end(), mem_fn(&thread::join));
 
-        cout << endl;
+        progInd.finalize();
 }
 
 void PWMScan::scanThreadBLAS(size_t speciesID,
-                             const MotifContainer& motifContainer,
+                             ProgressIndicator& progInd,
                              FastaBatch& seqBatch)
 {
         size_t overlap = motifContainer.getMaxMotifLen() - 1;
@@ -257,29 +255,29 @@ void PWMScan::scanThreadBLAS(size_t speciesID,
                 writeOccToDisk(occurrences);
                 occurrences.clear();
 
-                cout << "."; cout.flush();
+                progInd.printMessage(seqBatch.getProgressPerc());
         }
 }
 
 void PWMScan::scanPWMBLAS(size_t speciesID,
                           FastaBatch& seqBatch)
 {
-        // start histogram threads
+        // start scan threads
+        ProgressIndicator progInd;
         vector<thread> workerThreads(numThreads);
         for (size_t i = 0; i < workerThreads.size(); i++)
-                workerThreads[i] = thread(&PWMScan::scanThreadBLAS, this, speciesID,
-                                          cref(motifContainer),
-                                          ref(seqBatch));
+                workerThreads[i] = thread(&PWMScan::scanThreadBLAS, this,
+                                          speciesID, ref(progInd), ref(seqBatch));
 
         // wait for worker threads to finish
         for_each(workerThreads.begin(), workerThreads.end(), mem_fn(&thread::join));
 
-        cout << endl;
+        progInd.finalize();
 }
 
 #ifdef HAVE_CUDA
 void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
-                               FastaBatch& seqBatch)
+                               ProgressIndicator& progInd, FastaBatch& seqBatch)
 {
         float *d_P = 0, *d_S = 0, *d_R = 0;
         float *d_threshold = 0, *d_occScore = 0;
@@ -399,7 +397,7 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
 
                 occurrences.clear();
 
-                cout << "."; cout.flush();
+                progInd.printMessage(seqBatch.getProgressPerc());
         }
 
         // wait for all output to be written
@@ -435,15 +433,16 @@ void PWMScan::scanPWMCUBLAS(size_t speciesID,
         cout << "Using " << numDevices << " GPU devices" << endl;
 
         // start one thread per GPU device
+        ProgressIndicator progInd;
         vector<thread> workerThreads(numDevices);
         for (size_t i = 0; i < workerThreads.size(); i++)
                 workerThreads[i] = thread(&PWMScan::scanThreadCUBLAS, this, i,
-                                          speciesID, ref(seqBatch));
+                                          speciesID, ref(progInd), ref(seqBatch));
 
         // wait for worker threads to finish
         for_each(workerThreads.begin(), workerThreads.end(), mem_fn(&thread::join));
 
-        cout << endl;
+        progInd.finalize();
 }
 #endif
 
@@ -602,7 +601,7 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
                 }
 
                 vector<string> filenames = species.getSequenceFilenames();
-                FastaBatch seqBatch(filenames);
+                FastaBatch seqBatch(filenames, species.getTotalSeqLength());
 
                 // scan the sequences for PWM occurrences
                 if (simpleMode) {

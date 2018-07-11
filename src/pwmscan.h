@@ -37,6 +37,57 @@
 class SpeciesContainer;
 
 // ============================================================================
+// PROGRESS INDICATOR
+// ============================================================================
+
+class ProgressIndicator
+{
+private:
+        std::string message;            // message to print
+        float tolerance;                // only print if progress exceeds tolerance
+        float progress;
+        std::mutex myMutex;
+
+public:
+        /**
+         * Constructor
+         * @param message Message to print
+         * @param tolerance Only print message when delta progress > tolerance
+         */
+        ProgressIndicator(const std::string& message = "Progress...",
+                          float tolerance = 0.003) : message(message),
+                          tolerance(tolerance) {}
+
+        /**
+         * Print progress to standard output (thread safe)
+         * @param currProgress Current progress (0...1)
+         */
+        void printMessage(float currProgress) {
+                // try and lock if the mutex.
+                std::unique_lock<std::mutex> lock(myMutex, std::try_to_lock);
+                if (!lock.owns_lock())
+                        return;  // mutex wasn't locked.
+
+                // if there is insufficient progress... get out
+                if (currProgress - progress < tolerance)
+                        return;
+
+                auto oldPrec = std::cout.precision(1);
+                std::cout << message << " " << std::fixed << 100.0f*currProgress  << "%\r";
+                std::cout.flush();
+                std::cout.precision(oldPrec);
+                progress = currProgress;
+        }
+
+        /**
+         * Final message to print (100%)
+         */
+        void finalize() {
+                std::cout << message << " " << 100 << "%  " << std::endl;
+        }
+};
+
+// ============================================================================
 // PWMSCAN
 // ============================================================================
 
@@ -118,18 +169,21 @@ private:
         /**
          * Thread function that does the actual scanning (BLAS algorithm)
          * @param speciesID Species identifier
+         * @param progInd Progress indicator
          * @param seqBatch Fasta sequence batch
          */
         void scanThreadBLAS(size_t speciesID,
-                            const MotifContainer& motifContainer,
+                            ProgressIndicator& progInd,
                             FastaBatch& seqBatch);
 
         /**
          * Thread function that does the actual scanning (naive algorithm)
          * @param speciesID Species identifier
+         * @param progInd Progress indicator
          * @param seqBatch Fasta sequence batch
          */
         void scanThreadNaive(size_t speciesID,
+                             ProgressIndicator& progInd,
                              FastaBatch& seqBatch);
 
         /**
@@ -151,9 +205,11 @@ private:
          * Thread function that does the actual scanning (CUBLAS algorithm)
          * @param devID Device ID
          * @param speciesID Species identifier
+         * @param progInd Progress indicator
          * @param seqBatch Fasta sequence batch
          */
         void scanThreadCUBLAS(int devID, size_t speciesID,
+                              ProgressIndicator& progInd,
                               FastaBatch& seqBatch);
 
         /**
