@@ -357,8 +357,7 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
 
         map<int, int> offset_v;
 
-        size_t nOutputTasks = settings.num_output_tasks;
-        vector<future<void> > outputTask(nOutputTasks);
+        vector<future<void> > outputTask(numThreadsPerDevice);
         size_t currOutputTask = 0;
 
         while (sm.getNextSeqMatrix(seqBatch)) {
@@ -393,7 +392,7 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
                 if (outputTask[currOutputTask].valid())
                         outputTask[currOutputTask].get();
                 outputTask[currOutputTask] = async(launch::async, &PWMScan::writeOccToDiskCopy, this, occurrences);
-                currOutputTask = (currOutputTask + 1) % nOutputTasks;
+                currOutputTask = (currOutputTask + 1) % numThreadsPerDevice;
 
                 occurrences.clear();
 
@@ -422,16 +421,6 @@ void PWMScan::scanThreadCUBLAS(int devID, size_t speciesID,
 void PWMScan::scanPWMCUBLAS(size_t speciesID,
                             FastaBatch& seqBatch)
 {
-        int numDevices;
-        cudaGetDeviceCount(&numDevices);
-
-        if (numDevices == 0) {
-                cerr << "CUDA error: no devices found. Aborting..." << endl;
-                return;
-        }
-
-        cout << "Using " << numDevices << " GPU devices" << endl;
-
         // start one thread per GPU device
         ProgressIndicator progInd;
         vector<thread> workerThreads(numDevices);
@@ -553,7 +542,24 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
         else if (pvalueSpecified)
                 cout << "P-value motif score threshold set to: " << pvalue << endl;
 
-        cout << "Using " << numThreads << " thread(s)" << endl;
+        if (cudaMode) {
+#ifdef HAVE_CUDA
+                if (numDevices == 0) {
+                        cerr << "CUDA error: no devices found. Aborting..." << endl;
+                return;
+
+                cudaGetDeviceCount(&numDevices);
+                cout << "Using " << numDevices << " GPU devices" << endl;
+
+                numThreadsPerDevice = min<int>(numThreads / numDevices, 1);
+                cout << "Using " << numThreadsPerDevice << " CPU threads per GPU device" << endl;
+#else
+                cerr << "ERROR: CUDA support not enabled\n";
+                cerr << "Please recompile with CUDA support enabled" << endl;
+#endif
+        } else {
+                cout << "Using " << numThreads << " thread(s)" << endl;
+        }
 
         // C) scan the sequences
         ofstream ofsCutoff("PWMthresholds.txt");
@@ -609,9 +615,6 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
                 } else if (cudaMode) {
 #ifdef HAVE_CUDA
                         scanPWMCUBLAS(speciesID++, seqBatch);
-#else
-                        cerr << "ERROR: CUDA support not enabled\n";
-                        cerr << "Please recompile with CUDA support enabled" << endl;
 #endif
                 } else {
                         scanPWMBLAS(speciesID++, seqBatch);

@@ -121,6 +121,9 @@ private:
         size_t numThreads;              // number of threads used
         bool revCompl;                  // scan both directions (fwd/bwd)
 
+        int numDevices;                 // number of CUDA devices
+        int numThreadsPerDevice;        // number of threads per device
+
         /**
          * Print module instructions
          */

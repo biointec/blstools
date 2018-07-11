@@ -35,7 +35,6 @@ public:
         size_t matrix_P_tile_min_area;          // minimum area of matrix P tile
         double matrix_P_tile_min_zero_frac;     // minimum zero fraction in tile
         float pseudocount;                      // pseudocount
-        size_t num_output_tasks;                // number of output tasks per GPU device
 
         bool defaultVal;                        // default values used
 
