@@ -32,8 +32,7 @@ using namespace std;
 // ============================================================================
 
 Settings::Settings() : matrix_S_w(250), matrix_S_h(1000),
-        matrix_P_tile_min_size(32), matrix_P_tile_min_area(128*128),
-        matrix_P_tile_min_zero_frac(0.1), pseudocount(0.25f), defaultVal(true)
+        matrix_P_tile_min_zero_area(64*64), pseudocount(0.25f), defaultVal(true)
 {
         ifstream ifs("settings.cnf");
         if (!ifs)
@@ -61,12 +60,8 @@ Settings::Settings() : matrix_S_w(250), matrix_S_h(1000),
                         iss >> matrix_S_w;
                 } else if (key == "MATRIX_S_H") {
                         iss >> matrix_S_h;
-                } else if (key == "MATRIX_P_TILE_MIN_SIZE") {
-                        iss >> matrix_P_tile_min_size;
-                } else if (key == "MATRIX_P_TILE_MIN_AREA") {
-                        iss >> matrix_P_tile_min_area;
-                } else if (key == "MATRIX_P_TILE_MIN_ZERO_FRAC") {
-                        iss >> matrix_P_tile_min_zero_frac;
+                } else if (key == "MATRIX_P_TILE_MIN_ZERO_AREA") {
+                        iss >> matrix_P_tile_min_zero_area;
                 } else if (key == "PSEUDOCOUNT") {
                         iss >> pseudocount;
                 } else {
@@ -84,8 +79,6 @@ void Settings::printSettings()
 
         cout << "\tMATRIX_S_W\t\t" << matrix_S_w << "\n";
         cout << "\tMATRIX_S_H\t\t" << matrix_S_h << "\n";
-        cout << "\tMATRIX_P_TILE_MIN_SIZE\t\t" << matrix_P_tile_min_size << "\n";
-        cout << "\tMATRIX_P_TILE_MIN_AREA\t\t" << matrix_P_tile_min_area << "\n";
-        cout << "\tMATRIX_P_TILE_MIN_ZERO_FRAC\t" << matrix_P_tile_min_zero_frac << "\n";
+        cout << "\tMATRIX_P_TILE_MIN_ZERO_AREA\t" << matrix_P_tile_min_zero_area << "\n";
         cout << "\tPSEUDOCOUNT\t\t" << pseudocount << "\n";
 }

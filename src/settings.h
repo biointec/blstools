@@ -31,9 +31,7 @@ class Settings {
 public:
         size_t matrix_S_w;                      // no of rows in matrix S
         size_t matrix_S_h;                      // no of cols in matrix S
-        size_t matrix_P_tile_min_size;          // minimum size of matrix P tile
-        size_t matrix_P_tile_min_area;          // minimum area of matrix P tile
-        double matrix_P_tile_min_zero_frac;     // minimum zero fraction in tile
+        size_t matrix_P_tile_min_zero_area;     // minimum area of zeros in P when tiling
         float pseudocount;                      // pseudocount
 
         bool defaultVal;                        // default values used

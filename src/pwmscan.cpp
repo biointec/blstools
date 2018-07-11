@@ -509,7 +509,7 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
 
         cout << "Welcome to blamm -- PWM scan module" << endl;
 
-	settings.printSettings();
+        settings.printSettings();
 
         // A) load the manifest file
         string manifestFilename(argv[argc-1]);
@@ -530,9 +530,7 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
         }
 
         // compute the matrix tiles
-        motifContainer.generateMatrixTiles(settings.matrix_P_tile_min_size,
-                                           settings.matrix_P_tile_min_area,
-                                           settings.matrix_P_tile_min_zero_frac);
+        motifContainer.generateMatrixTiles(settings.matrix_P_tile_min_zero_area);
 
         // write some information about the threshold
         if (absThSpecified)
@@ -548,8 +546,8 @@ PWMScan::PWMScan(int argc, char ** argv) : simpleMode(false), cudaMode(false),
 
                 if (numDevices == 0) {
                         cerr << "CUDA error: no devices found. Aborting..." << endl;
-	                return;
-		}
+                return;
+                }
 
                 cout << "Using " << numDevices << " GPU devices" << endl;
 

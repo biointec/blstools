@@ -423,13 +423,10 @@ private:
         /**
          * Keep/reject a split
          * @param tilePair Two input tiles
-         * @param tileMinSize Minimum size for a tile
-         * @param tileMinArea Minimum area for a tile
-         * @param tileMinZeroFrac Minimum zero fraction for a tile
+         * @param tileZeroMinArea Minimum zero area gained by splitting
          * @return True or false
          */
-        bool keepSplit(const TilePair& tilePair, size_t tileMinSize,
-                       size_t tileMinArea, double tileMinZeroFrac);
+        bool keepSplit(const TilePair& tilePair, size_t tileMinZeroArea);
 
         std::vector<Motif> motifs;              // actual motifs
         Matrix P;                               // pattern matrix
@@ -480,13 +477,9 @@ public:
 
         /**
          * Partition matrix P into tiles if needed
-         * @param tileMinSize Minimum size for a tile
-         * @param tileMinArea Minimum area for a tile
-         * @param tileMinZeroFrac Minimum zero fraction for a tile
+         * @param tileMinZeroArea Minimum area for a tile
          */
-        void generateMatrixTiles(size_t tileMinSize,
-                                 size_t tileMinArea,
-                                 double tileMinZeroFrac);
+        void generateMatrixTiles(size_t tileMinZeroArea);
 
         /**
          * Get a const-reference to matrix P

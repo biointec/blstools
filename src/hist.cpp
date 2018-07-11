@@ -231,9 +231,7 @@ Histogram::Histogram(int argc, char ** argv) : maxLength(10000000), numBins(250)
 
         // compute the matrix tiles (only for empirical)
         if (empirical)
-                motifContainer.generateMatrixTiles(settings.matrix_P_tile_min_size,
-                                                   settings.matrix_P_tile_min_area,
-                                                   settings.matrix_P_tile_min_zero_frac);
+                motifContainer.generateMatrixTiles(settings.matrix_P_tile_min_zero_area);
 
         cout << "Using " << numThreads << " thread(s)" << endl;
 

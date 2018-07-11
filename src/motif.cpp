@@ -473,42 +473,16 @@ TilePair MotifContainer::findBestSplit(const MatrixTile& input)
         return make_pair(left, right);
 }
 
-bool MotifContainer::keepSplit(const TilePair& tilePair, size_t tileMinSize,
-                               size_t tileMinArea, double tileMinZeroFrac)
+bool MotifContainer::keepSplit(const TilePair& tilePair, size_t tileMinZeroArea)
 {
         const MatrixTile& f = tilePair.first;
         const MatrixTile& s = tilePair.second;
 
-        size_t origArea = (s.rowEnd-f.rowStart) * (s.colEnd-f.colStart);
-        size_t area1 = (f.rowEnd-f.rowStart) * (f.colEnd-f.colStart);
-        size_t area2 = (s.rowEnd-s.rowStart) * (s.colEnd-s.colStart);
-
-        // check the minimum matrix dimensions
-        if (f.colEnd - f.colStart < tileMinSize)
-                return false;
-        if (f.rowEnd - f.rowStart < tileMinSize)
-                return false;
-        if (s.colEnd - s.colStart < tileMinSize)
-                return false;
-        if (s.rowEnd - s.rowStart < tileMinSize)
-                return false;
-
-        // check the minimum area
-        if (area1 < tileMinArea)
-                return false;
-        if (area2 < tileMinArea)
-                return false;
-
-        // check the relative area gain
-        if (double(area1 + area2)/double(origArea) > (1.0-tileMinZeroFrac))
-                return false;
-
-        return true;
+        size_t zeroArea = (s.rowEnd - f.rowEnd) * (f.colEnd - f.colStart);
+        return (zeroArea >= tileMinZeroArea);
 }
 
-void MotifContainer::generateMatrixTiles(size_t tileMinSize,
-                                         size_t tileMinArea,
-                                         double tileMinZeroFrac)
+void MotifContainer::generateMatrixTiles(size_t tileMinZeroArea)
 {
         size_t nRows = 4 * getMaxMotifLen();
         size_t nCols = motifs.size();
@@ -524,7 +498,7 @@ void MotifContainer::generateMatrixTiles(size_t tileMinSize,
                 for (const auto& it : matrixTiles) {
                         auto res = findBestSplit(it);
 
-                        if (keepSplit(res, tileMinSize, tileMinArea, tileMinZeroFrac)) {
+                        if (keepSplit(res, tileMinZeroArea)) {
                                 // keep the split
                                 didSomething = true;
                                 newTiles.push_back(res.first);
