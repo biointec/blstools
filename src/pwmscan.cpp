@@ -190,6 +190,11 @@ void PWMScan::scanThreadNaive(size_t speciesID,
                                 occurrences.push_back(MotifOccurrence(j, speciesID, seqPos.getSeqIndex(),
                                                                       seqPos.getSeqPos(), strand, thisScore));
                         }
+
+                        if (occurrences.size() > settings.flushOutput) {
+                                writeOccToDisk(occurrences);
+                                occurrences.clear();
+                        }
                 }
 
                 writeOccToDisk(occurrences);
@@ -256,6 +261,11 @@ void PWMScan::scanThreadBLAS(size_t speciesID,
 
                         Matrix::sgemm_batch(p);
                         extractOccurrences(R, offset, speciesID, sm, occurrences);
+
+                        if (occurrences.size() > settings.flushOutput) {
+                                writeOccToDisk(occurrences);
+                                occurrences.clear();
+                        }
                 }
 
                 // write the occurrences to disk

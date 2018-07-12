@@ -32,6 +32,7 @@ public:
         size_t matrix_S_w;                      // no of rows in matrix S
         size_t matrix_S_h;                      // no of cols in matrix S
         size_t matrix_P_tile_min_zero_area;     // minimum area of zeros in P when tiling
+        size_t flushOutput;                     // flush output
         float pseudocount;                      // pseudocount
 
         bool defaultVal;                        // default values used

@@ -32,7 +32,8 @@ using namespace std;
 // ============================================================================
 
 Settings::Settings() : matrix_S_w(250), matrix_S_h(1000),
-        matrix_P_tile_min_zero_area(64*64), pseudocount(0.25f), defaultVal(true)
+        matrix_P_tile_min_zero_area(64*64), flushOutput(100000),
+        pseudocount(0.25f), defaultVal(true)
 {
         ifstream ifs("settings.cnf");
         if (!ifs)
@@ -64,6 +65,8 @@ Settings::Settings() : matrix_S_w(250), matrix_S_h(1000),
                         iss >> matrix_P_tile_min_zero_area;
                 } else if (key == "PSEUDOCOUNT") {
                         iss >> pseudocount;
+                } else if (key == "FLUSHOUTPUT") {
+                        iss >> flushOutput;
                 } else {
                         cerr << "WARNING: settings.cnf contains unknown key: " << key << endl;
                 }
@@ -81,4 +84,5 @@ void Settings::printSettings()
         cout << "\tMATRIX_S_H\t\t" << matrix_S_h << "\n";
         cout << "\tMATRIX_P_TILE_MIN_ZERO_AREA\t" << matrix_P_tile_min_zero_area << "\n";
         cout << "\tPSEUDOCOUNT\t\t" << pseudocount << "\n";
+        cout << "\tFLUSHOUTPUT\t\t" << flushOutput << "\n";
 }
