@@ -271,12 +271,9 @@ bool FastaBatch::getNextFilteredLine(std::string& line, SeqPos& seqPos)
         return true;
 }
 
-bool FastaBatch::getNextOverlappingBlock(SeqBlock& block, size_t maxSize,
+bool FastaBatch::getNextOverlappingBlock(SeqBlock& block, size_t payload,
                                          size_t overlap)
 {
-        // maximum block size needs to be bigger than the overlap size
-        assert(maxSize > overlap);
-
         // this function is thread-safe
         lock_guard<mutex> lock(m);
 
@@ -284,14 +281,15 @@ bool FastaBatch::getNextOverlappingBlock(SeqBlock& block, size_t maxSize,
         block = _nextBlock;
 
         // reduce maxSize in order not to exceed the total maximum size
-        if (!appendNextBlock(block, maxSize))
-                return false;
+        appendNextBlock(block, payload + overlap);
 
-        // if the block is completely filled, copy the suffix to _nextBlock
-        if (block.size() == maxSize)
-                block.getSuffixBlock(_nextBlock, block.size() - overlap);
+        // copy the overlap to _nextBlock to include as payload in future calls
+        if (block.size() > payload)
+                block.getSuffixBlock(_nextBlock, payload);
+        else
+                _nextBlock.clear();
 
-        return true;
+        return !block.empty();
 }
 
 // ============================================================================
@@ -300,19 +298,32 @@ bool FastaBatch::getNextOverlappingBlock(SeqBlock& block, size_t maxSize,
 
 bool SeqMatrix::getNextSeqMatrix(FastaBatch& bf)
 {
-        // compute the maximum block size
-        size_t maxBlockSize = K * numRow + overlap;
-
         // get the next block
-        if(!bf.getNextOverlappingBlock(block, maxBlockSize, overlap))
+        if(!bf.getNextOverlappingBlock(block, K * numRow, overlap))
                 return false;
 
         // fill the sequence matrix
-        S.fill(0.0f);
+        S.setZero();
         for (size_t i = 0; i < numRow; i++) {
-                for (size_t j = 0; j < (K + overlap); j++) {
+                // we're in the payload section of S
+                for (size_t j = 0; j < K; j++) {
                         if ((i*K+j) >= block.size())
                                 return true;
+                        if (block[i*K+j] == 'A')
+                                S(i, 4*j+0) = 1;
+                        if (block[i*K+j] == 'C')
+                                S(i, 4*j+1) = 1;
+                        if (block[i*K+j] == 'G')
+                                S(i, 4*j+2) = 1;
+                        if (block[i*K+j] == 'T')
+                                S(i, 4*j+3) = 1;
+                        numOccRow = i + 1;
+                }
+
+                // we're in the overlap section of S -- don't return (!)
+                for (size_t j = K; j < (K + overlap); j++) {
+                        if ((i*K+j) >= block.size())
+                                break;
                         if (block[i*K+j] == 'A')
                                 S(i, 4*j+0) = 1;
                         if (block[i*K+j] == 'C')

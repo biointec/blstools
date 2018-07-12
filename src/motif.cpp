@@ -225,10 +225,11 @@ void Motif::PFM2PWM(const std::array<size_t, 4>& bgCounts, float pseudoCount)
 float Motif::getScore(const std::string& pattern) const
 {
         // make sure the pattern and motif have the same size
-        assert (pattern.size() == size());
+        if (pattern.size() < size())
+                return getMinScore();
 
         float score = 0.0f;
-        for (size_t i = 0; i < pattern.size(); i++) {
+        for (size_t i = 0; i < size(); i++) {
                 size_t j = char2idx(pattern[i]);
                 if (j < 4)      // if ACTG character
                         score += PWM[i][j];
@@ -329,11 +330,9 @@ void MotifContainer::load(const std::string& filename, bool loadPermutations)
                 loadCBMotifs(filename, allMotifs);
 
         // copy the temporary allmotifs structure to motifs
-        size_t motifID = 0;
         for (const auto& motif : allMotifs) {
                 if (loadPermutations || !motif.isPermutation()) {
                         motifs.push_back(motif);
-                        motifs.back().setID(motifID++);
                 }
         }
 }
@@ -345,14 +344,13 @@ void MotifContainer::loadCBMotifs(const std::string& filename,
         if (!ifs)
                 throw runtime_error("Could not open file: " + filename);
 
-        size_t motifID = 0;
         while (ifs.good()) {
                 string temp;
                 getline(ifs, temp);
                 if (temp.empty())
                         continue;
                 if (temp.front() == '>') {      // add a new motif
-                        motifs.push_back(Motif(temp.substr(1), motifID++));
+                        motifs.push_back(Motif(temp.substr(1)));
                         continue;
                 }
 
@@ -376,7 +374,6 @@ void MotifContainer::loadJasparMotifs(const std::string& filename,
         if (!ifs)
                 throw runtime_error("Could not open file: " + filename);
 
-        size_t motifID = 0;
         while (ifs.good()) {
                 string motifName, temp;
                 ifs >> motifName;
@@ -404,7 +401,7 @@ void MotifContainer::loadJasparMotifs(const std::string& filename,
                         }
                 }
 
-                motifs.push_back(Motif(motifName, motifID++));
+                motifs.push_back(Motif(motifName));
                 for (size_t i = 0; i < freq[0].size(); i++)
                         motifs.back().addCharacter({freq[0][i], freq[1][i], freq[2][i], freq[3][i]});
         }

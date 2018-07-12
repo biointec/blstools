@@ -122,6 +122,14 @@ public:
         size_t getRemainingSeqLen(size_t blockPos) const;
 
         /**
+         *
+         *
+         */
+        std::string substr(size_t startPos, size_t len) {
+                return block.substr(startPos, len);
+        }
+
+        /**
          * Append a new sequence to the block
          * @param data Sequence content
          * @param sp Sequence position
@@ -305,13 +313,13 @@ public:
         bool getNextFilteredLine(std::string& line, SeqPos& seqPos);
 
         /**
-         * Get a filtered sequence data and append to block
-         * @param block Block of bulk sequence data (input/output)
-         * @param maxSize Maximum size of the block
-         * @param overlap Overlap with the previous block
+         * Get filtered sequence data
+         * @param block Block of sequence data (max size = payload + overlap)
+         * @param payload Desired size of the content
+         * @param overlap Overlap between consecutive blocks
          * @return True if the block is non-empty
          */
-        bool getNextOverlappingBlock(SeqBlock& block, size_t maxSize,
+        bool getNextOverlappingBlock(SeqBlock& block, size_t payload,
                                      size_t overlap);
 };
 

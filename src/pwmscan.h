@@ -55,8 +55,8 @@ public:
          * @param tolerance Only print message when delta progress > tolerance
          */
         ProgressIndicator(const std::string& message = "Progress...",
-                          float tolerance = 0.003) : message(message),
-                          tolerance(tolerance) {}
+                          float tolerance = 0.003f) : message(message),
+                          tolerance(tolerance), progress(0.0f) {}
 
         /**
          * Print progress to standard output (thread safe)

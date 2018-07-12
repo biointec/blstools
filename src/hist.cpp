@@ -162,13 +162,14 @@ void Histogram::generateTheoreticalHist(const Species& species,
                                         const MotifContainer& motifContainer,
                                         vector<ScoreHistogram>& histContainer)
 {
-        for (const Motif& m : motifContainer) {
+        for (size_t i = 0; i < motifContainer.size(); i++) {
+                const Motif& m = motifContainer[i];
                 map<float, float> spectrum;     // < score, PDF >
                 array<float, 4> background = species.getNuclProbabilities(settings.pseudocount);
                 m.computeTheoreticalSpectrum(numBins, background, spectrum);
 
                 for (const auto& it : spectrum)
-                        histContainer[m.getID()].setNumObservations(it.first, maxLength * it.second);
+                        histContainer[i].setNumObservations(it.first, maxLength * it.second);
         }
 }
 

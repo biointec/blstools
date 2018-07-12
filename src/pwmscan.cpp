@@ -125,7 +125,7 @@ void PWMScan::extractOccurrences(const Matrix& R, size_t offset,
                                 continue;
 
                         char strand = m.isRevCompl() ? '-' : '+';
-                        motifOcc.push_back(MotifOccurrence(m.getID(), speciesID, seqPos.getSeqIndex(),
+                        motifOcc.push_back(MotifOccurrence(motifIdx, speciesID, seqPos.getSeqIndex(),
                                                            seqPos.getSeqPos(), strand, thisScore));
                 }
         }
@@ -155,7 +155,7 @@ void PWMScan::extractOccurrences2(int LDR, const map<int, int>& offset_v,
                                 continue;
 
                         char strand = m.isRevCompl() ? '-' : '+';
-                        motifOcc.push_back(MotifOccurrence(m.getID(), speciesID, seqPos.getSeqIndex(),
+                        motifOcc.push_back(MotifOccurrence(motifIdx, speciesID, seqPos.getSeqIndex(),
                                                            seqPos.getSeqPos(), strand, thisScore));
                 }
         }
@@ -167,21 +167,28 @@ void PWMScan::scanThreadNaive(size_t speciesID,
 {
         vector<MotifOccurrence> occurrences;
 
-        string line; SeqPos seqPos;
-        while (seqBatch.getNextFilteredLine(line, seqPos)) {
-                for (size_t i = 0; i < line.size(); i++) {
+        // we're reading the fasta files in blocks that overlap
+        SeqBlock block;
+        size_t overlap = motifContainer.getMaxMotifLen() - 1;
+        size_t payload = settings.matrix_S_h * settings.matrix_S_w;
+
+        while (seqBatch.getNextOverlappingBlock(block, payload, overlap)) {
+                for (size_t i = 0; i < min<size_t>(block.size(), payload); i++) {
                         for (size_t j = 0; j < motifContainer.size(); j++) {
                                 const Motif& m = motifContainer[j];
-                                if (m.size() > (line.size() - i))
-                                        continue;
-                                float thisScore = m.getScore(line.substr(i, m.size()));
+                                float thisScore = m.getScore(block.substr(i, m.size()));
                                 if (thisScore < m.getThreshold())
                                         continue;
 
-                                char strand = m.isRevCompl() ? '-' : '+';
+                                SeqPos seqPos = block.getSeqPos(i);
+                                size_t remSeqLen = block.getRemainingSeqLen(i);
 
-                                occurrences.push_back(MotifOccurrence(m.getID(), speciesID, seqPos.getSeqIndex(),
-                                                                      seqPos.getSeqPos() + i, strand, thisScore));
+                                if (m.size() > remSeqLen)
+                                        continue;
+
+                                char strand = m.isRevCompl() ? '-' : '+';
+                                occurrences.push_back(MotifOccurrence(j, speciesID, seqPos.getSeqIndex(),
+                                                                      seqPos.getSeqPos(), strand, thisScore));
                         }
                 }
 

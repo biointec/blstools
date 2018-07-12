@@ -152,7 +152,6 @@ public:
 class Motif {
 private:
         std::string name;                               // name of the motif
-        size_t motifID;                                 // motif identifier
         std::vector<std::array<size_t, 4> > PFM;        // position frequency matrix
         std::vector<std::array<float, 4> > PPM;         // position probability matrix
         std::vector<std::array<float, 4> > PWM;         // position weight matrix
@@ -167,15 +166,14 @@ public:
         /**
          * Default constructor
          */
-        Motif() : motifID(0), threshold(0.0f), revComp(false) {}
+        Motif() : threshold(0.0f), revComp(false) {}
 
         /**
          * Default constructor
          * @param name Name of the motif
-         * @param motifID Motif identifier
          */
-        Motif(const std::string& name, size_t motifID) : name(name),
-                motifID(motifID), threshold(0.0f), revComp(false) {}
+        Motif(const std::string& name) : name(name),
+                threshold(0.0f), revComp(false) {}
 
         /**
          * Get the name of the motif
@@ -183,22 +181,6 @@ public:
          */
         const std::string& getName() const {
                 return name;
-        }
-
-        /**
-         * Get the motif identifier
-         * @return The motif identifier
-         */
-        size_t getID() const {
-                return motifID;
-        }
-
-        /**
-         * Set the motif identifier
-         * @param target Target motif identifier
-         */
-        void setID(size_t target) {
-                motifID = target;
         }
 
         /**

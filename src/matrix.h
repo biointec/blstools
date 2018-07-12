@@ -25,6 +25,7 @@
 #include <cassert>
 #include <vector>
 #include <config.h>
+#include <cstring>
 
 #ifdef HAVE_MKL
         #include "mkl.h"
@@ -208,6 +209,13 @@ public:
                 cols = nCols;
                 allocateMemory();
                 fill(el);
+        }
+
+        /**
+         * Set the matrix elements to zero fast
+         */
+        void setZero() {
+                memset(data, 0, sizeof(float)*rows*cols);
         }
 
         /**
